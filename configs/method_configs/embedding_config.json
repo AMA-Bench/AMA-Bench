@@ -1,0 +1,12 @@
+{
+  "top_k": 5,
+  "embedding_model": "qwen3-embedding-4B",
+  "use_faiss": true,
+  "embedding_engine": {
+    "model_name": "qwen3-embedding-4B",
+    "base_url": "http://localhost:8003/v1",
+    "api_key": "EMPTY",
+    "batch_size": 8,
+    "max_length": 512
+  }
+}

@@ -1,0 +1,46 @@
+# Core dependencies for AMA-Bench
+# Recommended Python: 3.9-3.11 (see pyproject.toml for version constraints)
+#
+# Installation:
+#   pip install -r requirements.txt
+#
+# The constraints file ensures vLLM compatibility on Python 3.11+
+-c constraints.txt
+
+# LLM API clients
+anthropic>=0.18.0
+openai>=1.12.0
+google-generativeai
+
+# Configuration and utilities
+pyyaml>=6.0
+tiktoken>=0.5.0
+tqdm>=4.65.0
+numpy>=1.24.0
+
+# Web and async
+requests>=2.25.0
+httpx>=0.27.0
+aiohttp
+datasets>=2.18.0
+huggingface_hub>=0.22.0
+
+# Deep learning and serving
+# Note: torch and vllm versions should match those in pyproject.toml
+# Typically installed via setup scripts for proper compatibility
+torch>=2.1.0
+vllm>=0.2.0
+ray[serve,default]
+starlette>=0.49.1
+transformers>=4.40.0
+faiss-cpu>=1.8.0
+rank-bm25>=0.2.2
+
+# Evaluation environments
+alfworld>=0.2.4
+gymnasium>=0.29.0
+minigrid>=2.3.0
+textworld
+
+# Evaluation metrics
+rouge-score>=0.1.2

@@ -1,0 +1,28 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Output directories
+babyai_out_batch/
+tw_out/
+tw_out_batch/
+dataset/
+yujie/
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Game files
+*.z8
+*.ulx
+*.json.bak
