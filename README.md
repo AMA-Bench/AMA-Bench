@@ -1,11 +1,11 @@
-# AMA-Bench: Agent Memory Architecture Benchmark
+# AMA-Bench: Evaluating Long-Horizon Memory for Agentic Applications
 
 [![Website](https://img.shields.io/badge/Website-ama--bench.github.io-blue)](https://ama-bench.github.io/)
 [![Paper](https://img.shields.io/badge/arXiv-2602.22769-b31b1b.svg)](https://arxiv.org/abs/2602.22769)
 [![Dataset](https://img.shields.io/badge/🤗%20Hugging%20Face-Dataset-yellow)](https://huggingface.co/datasets/AMA-bench/AMA-bench)
 [![Leaderboard](https://img.shields.io/badge/🤗%20Hugging%20Face-Leaderboard-blue)](https://huggingface.co/spaces/AMA-bench/AMA-bench-Leaderboard)
 
-AMA-Bench is a benchmark for evaluating memory architectures on long-horizon agent trajectories.
+AMA-Bench is a benchmark for evaluating agent memory on long-horizon agent trajectories.
 
 ## 🗞️ News
 
