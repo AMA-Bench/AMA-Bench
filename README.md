@@ -7,6 +7,8 @@
 
 AMA-Bench is a benchmark for evaluating agent memory on long-horizon agent trajectories.
 
+![AMA-Bench memory formulation](assets/memform.png)
+
 ## 🗞️ News
 
 - [ ] **[coming soon]** 🤖 AMA-Agent code release
@@ -141,6 +143,17 @@ Visit the [AMA-Bench Leaderboard](https://huggingface.co/spaces/AMA-bench/AMA-be
 ```
 
 Required fields: `episode_id`, `answer_list`. `reasoning_trace` is optional.
+
+---
+
+## Media
+
+- AMA-Bench was featured by dair.ai: https://x.com/dair_ai/status/2027776582262395054
+- Special thanks to Vincent De Genova for the visual notes and homepage feature: https://vdegenova.github.io/visual-notes/visuals/ama-bench/
+
+## Contact
+
+- yuz285@ucsd.edu
 
 ---
 
