@@ -1,9 +1,11 @@
 import json
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-from src.model_client import ModelClient
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from tqdm import tqdm
+
+from src.model_client import ModelClient
 from utils.evaluation_metrics import compute_llm_as_judge
 
 
@@ -24,31 +26,31 @@ def evaluate_batch(
     Returns:
         List of evaluated results with scores added
     """
-    
 
     def evaluate_single(result: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate a single QA result."""
         score = compute_llm_as_judge(
-            question=result['question'],
-            golden_answer=result['golden_answer'],
-            predicted_answer=result['predicted_answer'],
+            question=result["question"],
+            golden_answer=result["golden_answer"],
+            predicted_answer=result["predicted_answer"],
             judge_client=judge_client,
-            task_description=result.get('task_description', ''),
-            task_type=result.get('task_type', ''),
-            episode_id=str(result.get('episode_id', '')),
+            task_description=result.get("task_description", ""),
+            task_type=result.get("task_type", ""),
+            episode_id=str(result.get("episode_id", "")),
         )
-        result['score'] = score
+        result["score"] = score
         return result
 
     # Use thread pool for concurrent evaluation
     evaluated_results = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_result = {
-            executor.submit(evaluate_single, result): result
-            for result in qa_results
+            executor.submit(evaluate_single, result): result for result in qa_results
         }
 
-        with tqdm(total=len(qa_results), desc="Evaluating QA pairs", unit="pair") as pbar:
+        with tqdm(
+            total=len(qa_results), desc="Evaluating QA pairs", unit="pair"
+        ) as pbar:
             for future in as_completed(future_to_result):
                 evaluated_results.append(future.result())
                 pbar.update(1)
@@ -82,7 +84,7 @@ def evaluate_from_files(
 
     # Load test data to get original information
     original_episodes = {}
-    with open(test_file, 'r') as f:
+    with open(test_file, "r") as f:
         for line in f:
             episode_data = json.loads(line.strip())
             episode_id = episode_data.get("episode_id")
@@ -90,35 +92,37 @@ def evaluate_from_files(
 
     # Load answers
     episode_results = []
-    with open(answers_file, 'r') as f:
+    with open(answers_file, "r") as f:
         for line in f:
             episode_results.append(json.loads(line.strip()))
 
     # Build QA results for evaluation
     all_qa_results = []
     for episode in episode_results:
-        episode_id = episode['episode_id']
-        answer_list = episode['answer_list']
+        episode_id = episode["episode_id"]
+        answer_list = episode["answer_list"]
 
         # Get original episode data
         original_episode = original_episodes.get(episode_id, {})
-        task_type = original_episode.get('task_type', 'unknown')
-        domain = original_episode.get('domain', 'unknown')
-        task_description = original_episode.get('task', '')
-        qa_pairs = original_episode.get('qa_pairs', [])
+        task_type = original_episode.get("task_type", "unknown")
+        domain = original_episode.get("domain", "unknown")
+        task_description = original_episode.get("task", "")
+        qa_pairs = original_episode.get("qa_pairs", [])
 
         # Match answers with golden answers
         for i, (predicted_answer, qa_pair) in enumerate(zip(answer_list, qa_pairs)):
-            all_qa_results.append({
-                'episode_id': episode_id,
-                'task_type': task_type,
-                'domain': domain,
-                'task_description': task_description,
-                'question': qa_pair.get('question', ''),
-                'golden_answer': qa_pair.get('answer', ''),
-                'predicted_answer': predicted_answer,
-                'qa_type': qa_pair.get('type') or 'unknown',
-            })
+            all_qa_results.append(
+                {
+                    "episode_id": episode_id,
+                    "task_type": task_type,
+                    "domain": domain,
+                    "task_description": task_description,
+                    "question": qa_pair.get("question", ""),
+                    "golden_answer": qa_pair.get("answer", ""),
+                    "predicted_answer": predicted_answer,
+                    "qa_type": qa_pair.get("type") or "unknown",
+                }
+            )
 
     # Evaluate using LLM judge
     print(f"\n🔍 Evaluating {len(all_qa_results)} QA pairs...")
@@ -133,10 +137,10 @@ def evaluate_from_files(
     stats_by_qa_type = {}
 
     for r in evaluated_results:
-        task_type = r.get('task_type', 'unknown')
-        domain = r.get('domain', 'unknown')
-        qa_type = r.get('qa_type', 'unknown')
-        score = r['score']
+        task_type = r.get("task_type", "unknown")
+        domain = r.get("domain", "unknown")
+        qa_type = r.get("qa_type", "unknown")
+        score = r["score"]
 
         # Group by task_type
         if task_type not in stats_by_task_type:
@@ -156,51 +160,60 @@ def evaluate_from_files(
     # Calculate averages
     task_type_stats = {
         k: {
-            'count': len(v),
-            'avg_score': sum(v) / len(v) if v else 0,
-            'accuracy': sum(1 for s in v if s == 1.0) / len(v) if v else 0
+            "count": len(v),
+            "avg_score": sum(v) / len(v) if v else 0,
+            "accuracy": sum(1 for s in v if s == 1.0) / len(v) if v else 0,
         }
         for k, v in stats_by_task_type.items()
     }
 
     domain_stats = {
         k: {
-            'count': len(v),
-            'avg_score': sum(v) / len(v) if v else 0,
-            'accuracy': sum(1 for s in v if s == 1.0) / len(v) if v else 0
+            "count": len(v),
+            "avg_score": sum(v) / len(v) if v else 0,
+            "accuracy": sum(1 for s in v if s == 1.0) / len(v) if v else 0,
         }
         for k, v in stats_by_domain.items()
     }
 
     qa_type_stats = {
         k: {
-            'count': len(v),
-            'avg_score': sum(v) / len(v) if v else 0,
-            'accuracy': sum(1 for s in v if s == 1.0) / len(v) if v else 0
+            "count": len(v),
+            "avg_score": sum(v) / len(v) if v else 0,
+            "accuracy": sum(1 for s in v if s == 1.0) / len(v) if v else 0,
         }
         for k, v in stats_by_qa_type.items()
     }
 
     # Build evaluation summary
     evaluation_summary = {
-        'config': {
-            'judge_provider': judge_client.provider,
-            'judge_model': judge_client.model,
+        "config": {
+            "judge_provider": judge_client.provider,
+            "judge_model": judge_client.model,
         },
-        'overall': {
-            'total_questions': len(evaluated_results),
-            'avg_score': sum(r['score'] for r in evaluated_results) / len(evaluated_results) if evaluated_results else 0,
-            'accuracy': sum(1 for r in evaluated_results if r['score'] == 1.0) / len(evaluated_results) if evaluated_results else 0,
+        "overall": {
+            "total_questions": len(evaluated_results),
+            "avg_score": (
+                sum(r["score"] for r in evaluated_results) / len(evaluated_results)
+                if evaluated_results
+                else 0
+            ),
+            "accuracy": (
+                sum(1 for r in evaluated_results if r["score"] == 1.0)
+                / len(evaluated_results)
+                if evaluated_results
+                else 0
+            ),
         },
-        'by_task_type': task_type_stats,
-        'by_domain': domain_stats,
-        'by_qa_type': qa_type_stats,
-        'results': evaluated_results,
+        "by_task_type": task_type_stats,
+        "by_domain": domain_stats,
+        "by_qa_type": qa_type_stats,
+        "results": evaluated_results,
     }
 
     # Save results if output file specified
     if output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(evaluation_summary, f, indent=2)
         print(f"✅ Evaluation results saved to: {output_file}")
 
@@ -209,9 +222,9 @@ def evaluate_from_files(
 
 def print_evaluation_summary(summary: Dict[str, Any]) -> None:
     """Print formatted evaluation summary."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("EVALUATION SUMMARY")
-    print("="*70)
+    print("=" * 70)
 
     print(f"\n📊 Overall Performance:")
     print(f"  Total questions: {summary['overall']['total_questions']}")
@@ -219,16 +232,16 @@ def print_evaluation_summary(summary: Dict[str, Any]) -> None:
     print(f"  Accuracy: {summary['overall']['accuracy']:.4f}")
 
     print(f"\n🌐 By Domain:")
-    for domain, stats in sorted(summary.get('by_domain', {}).items()):
+    for domain, stats in sorted(summary.get("by_domain", {}).items()):
         print(f"  {domain}:")
         print(f"    Accuracy: {stats['accuracy']:.4f} ({stats['count']} questions)")
 
     print(f"\n❓ By QA Type:")
-    for qa_type, stats in sorted(summary.get('by_qa_type', {}).items()):
+    for qa_type, stats in sorted(summary.get("by_qa_type", {}).items()):
         print(f"  Type {qa_type}:")
         print(f"    Accuracy: {stats['accuracy']:.4f} ({stats['count']} questions)")
 
-    print("="*70)
+    print("=" * 70)
 
 
 if __name__ == "__main__":
@@ -254,19 +267,37 @@ Examples:
     --judge-config configs/llm_judge.yaml \\
     --judge-server vllm \\
     --output-file results/evaluation_results.json
-        """
+        """,
     )
 
-    parser.add_argument("--answers-file", type=str, required=True,
-                        help="Path to JSONL file with generated answers")
-    parser.add_argument("--test-file", type=str, required=True,
-                        help="Path to original test JSONL file")
-    parser.add_argument("--judge-config", type=str, required=True,
-                        help="Path to judge LLM configuration YAML file")
-    parser.add_argument("--judge-server", type=str, choices=["api", "vllm"], default="api",
-                        help="Judge server type (api or vllm)")
-    parser.add_argument("--output-file", type=str, default=None,
-                        help="Path to save evaluation results JSON file")
+    parser.add_argument(
+        "--answers-file",
+        type=str,
+        required=True,
+        help="Path to JSONL file with generated answers",
+    )
+    parser.add_argument(
+        "--test-file", type=str, required=True, help="Path to original test JSONL file"
+    )
+    parser.add_argument(
+        "--judge-config",
+        type=str,
+        required=True,
+        help="Path to judge LLM configuration YAML file",
+    )
+    parser.add_argument(
+        "--judge-server",
+        type=str,
+        choices=["api", "vllm"],
+        default="api",
+        help="Judge server type (api or vllm)",
+    )
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        default=None,
+        help="Path to save evaluation results JSON file",
+    )
 
     args = parser.parse_args()
 

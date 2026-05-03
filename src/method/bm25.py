@@ -16,20 +16,28 @@
 BM25 Method - Uses BM25 retrieval for memory construction and retrieval
 """
 
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from typing import Any, List, override
 
 from rank_bm25 import BM25Okapi
 
-from src.method.base_method import BaseMethod
+from .base import *
 
 
-class BM25Memory:
+@dataclass
+class BM25Config(BaseConfig):
+    """Configuration for BM25 method"""
+
+    top_k: int = 5
+
+
+@dataclass
+class BM25Memory(BaseMemory):
     """Memory object for BM25 method"""
 
-    def __init__(self, documents: List[str], bm25_index: BM25Okapi, corpus_tokens: List[List[str]]):
-        self.documents = documents
-        self.bm25_index = bm25_index
-        self.corpus_tokens = corpus_tokens
+    documents: List[str]
+    bm25_index: BM25Okapi
+    corpus_tokens: List[List[str]]
 
 
 class BM25Method(BaseMethod):
@@ -39,7 +47,7 @@ class BM25Method(BaseMethod):
     Uses BM25 (Best Matching 25) ranking function to retrieve relevant trajectory segments.
     """
 
-    def __init__(self, top_k: int = 5, config_path: str = None, embedding_engine: Any = None):
+    def __init__(self, config_path: os.PathLike = None):
         """
         Initialize BM25 method.
 
@@ -49,14 +57,15 @@ class BM25Method(BaseMethod):
             embedding_engine: Optional embedding engine (not used by BM25, for compatibility)
         """
 
-        # Load config if provided
-        if config_path:
-            config = self._load_config(config_path)
-            top_k = config.get('top_k', top_k)
+        super().__init__(config_path=config_path)
+        self.config = self._parse_config()
 
-        self.top_k = top_k
-        self.embedding_engine = embedding_engine  # Not used, for compatibility
+    @override
+    def _parse_config(self) -> BM25Config:
+        config_dict = self._load_config(self.config_path)
+        return BM25Config(top_k=config_dict.get("top_k"))
 
+    @override
     def memory_construction(self, traj_text: str, task: str = "") -> BM25Memory:
         """
         Build BM25 index from trajectory text.
@@ -71,19 +80,19 @@ class BM25Method(BaseMethod):
         # Split trajectory into documents (one per turn)
         # Each turn is separated by double newline
         documents = []
-        lines = traj_text.split('\n')
+        lines = traj_text.split("\n")
 
         current_turn = []
         for line in lines:
-            if line.strip().startswith('Turn ') or line.strip().startswith('Step '):
+            if line.strip().startswith("Turn ") or line.strip().startswith("Step "):
                 if current_turn:
-                    documents.append('\n'.join(current_turn))
+                    documents.append("\n".join(current_turn))
                     current_turn = []
             current_turn.append(line)
 
         # Add the last turn
         if current_turn:
-            documents.append('\n'.join(current_turn))
+            documents.append("\n".join(current_turn))
 
         # If no turns found, treat entire text as one document
         if not documents:
@@ -97,6 +106,7 @@ class BM25Method(BaseMethod):
 
         return BM25Memory(documents, bm25_index, corpus_tokens)
 
+    @override
     def memory_retrieve(self, memory: BM25Memory, question: str) -> str:
         """
         Retrieve relevant documents using BM25.
@@ -116,7 +126,9 @@ class BM25Method(BaseMethod):
 
         # Retrieve top-k documents using BM25
         scores = memory.bm25_index.get_scores(query_tokens)
-        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[: self.top_k]
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[
+            : self.config.top_k
+        ]
 
         # Get top documents
         retrieved_docs = [memory.documents[i] for i in top_indices]

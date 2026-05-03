@@ -7,6 +7,7 @@ from typing import Optional
 @dataclass
 class QAResult:
     """Result of a single QA evaluation."""
+
     file_name: str
     episode_id: int
     task_type: str

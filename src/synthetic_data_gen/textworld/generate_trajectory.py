@@ -8,8 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import textworld
 import tiktoken
-
-from textworld_label_generator import TextWorldStateTracker, TextWorldQAGenerator
+from textworld_label_generator import TextWorldQAGenerator, TextWorldStateTracker
 
 
 @dataclass
@@ -169,9 +168,17 @@ def run_episode(
         policy_cmds = obs.get("policy_commands", [])
 
         # Use optimal policy commands if available, otherwise fall back to random
-        if policy == "random_admissible" and isinstance(policy_cmds, list) and len(policy_cmds) > 0:
+        if (
+            policy == "random_admissible"
+            and isinstance(policy_cmds, list)
+            and len(policy_cmds) > 0
+        ):
             action = policy_cmds[0]  # Get the first optimal action
-        elif policy == "random_admissible" and isinstance(admissible, list) and len(admissible) > 0:
+        elif (
+            policy == "random_admissible"
+            and isinstance(admissible, list)
+            and len(admissible) > 0
+        ):
             action = rng.choice(admissible)
         else:
             action = "look"
@@ -198,7 +205,7 @@ def run_episode(
             facts=facts,
             inventory_text=inventory_text,
             location=location,
-            admissible_commands=action_space
+            admissible_commands=action_space,
         )
 
         # Add current action space to observation
@@ -211,10 +218,10 @@ def run_episode(
                 "turn_idx": t,
                 "action": action,
                 "observation": obs_text,
-                #"action_space": action_space,
+                # "action_space": action_space,
             }
         )
-        
+
         # Generate question candidates for this step
         qa_generator.maybe_add_per_step(t)
 
@@ -239,7 +246,9 @@ def run_episode(
         "task_type": tracker.inferred_task_type or "textworld",
         "game_file": game_file,
         "state": "success" if success else "fail",
-        "fail_reason": "" if success else ("reached_max_steps" if t >= max_steps else "unknown"),
+        "fail_reason": (
+            "" if success else ("reached_max_steps" if t >= max_steps else "unknown")
+        ),
         "num_turns": len(trajectory),
         "total_tokens": total_tokens,
         "trajectory": trajectory,
@@ -298,7 +307,7 @@ def main() -> None:
             game_file=str(game_file),
             episode_id=episode_id,
             policy="random_admissible",
-            mode=mode
+            mode=mode,
         )
     finally:
         try:

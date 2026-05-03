@@ -12,8 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import textworld
 import tiktoken
-
-from textworld_label_generator import TextWorldStateTracker, TextWorldQAGenerator
+from textworld_label_generator import TextWorldQAGenerator, TextWorldStateTracker
 
 
 @dataclass
@@ -117,12 +116,12 @@ def expand_observation_verbose(
 ) -> str:
     """
     Expand observation with verbose state information to increase token count.
-    
+
     Args:
         verbosity: "low" (minimal), "medium" (moderate), "high" (very detailed)
     """
     expanded = []
-    
+
     if verbosity == "low":
         expanded.append(obs_text)
         if action_space:
@@ -131,22 +130,26 @@ def expand_observation_verbose(
                 action_summary += f", ... ({len(action_space)} total)"
             expanded.append(f"\nAvailable actions: {action_summary}")
         return "\n".join(expanded)
-    
+
     if verbosity in ["medium", "high"]:
         expanded.append(f"=== Step {t} - Environment State ===")
-    
+
     expanded.append(f"\n[Observation at Turn {t}]")
     expanded.append(obs_text)
-    
+
     if objective and verbosity in ["medium", "high"]:
         expanded.append(f"\n[Current Task]")
         expanded.append(f"Objective: {objective}")
-    
+
     if action_space:
         expanded.append(f"\n[Available Actions]")
         if verbosity == "high":
-            expanded.append(f"The agent has {len(action_space)} possible actions available at this step.")
-            expanded.append("These actions represent all valid commands the agent can execute given the current state:")
+            expanded.append(
+                f"The agent has {len(action_space)} possible actions available at this step."
+            )
+            expanded.append(
+                "These actions represent all valid commands the agent can execute given the current state:"
+            )
             for i, action in enumerate(action_space):
                 expanded.append(f"  {i+1}. {action}")
         else:
@@ -155,15 +158,12 @@ def expand_observation_verbose(
                 expanded.append(f"  {i+1}. {action}")
             if len(action_space) > 20:
                 expanded.append(f"  ... and {len(action_space) - 20} more actions")
-    
+
     return "\n".join(expanded)
 
 
 def build_game(
-    out_dir: Path,
-    cfg: DifficultyConfig,
-    seed: int,
-    game_type: str
+    out_dir: Path, cfg: DifficultyConfig, seed: int, game_type: str
 ) -> Tuple[str, Any]:
     """Build a TextWorld game with specific configuration."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -211,7 +211,7 @@ async def run_episode(
     mode: str = "validate",
 ) -> Dict[str, Any]:
     """Run a single episode and return trajectory.
-    
+
     Args:
         difficulty_name: Difficulty level name, used to determine verbosity
         mode: "validate" generates 10 QA pairs, "train" generates 50 QA pairs
@@ -268,7 +268,7 @@ async def run_episode(
             facts=facts,
             inventory_text=inventory_text,
             location=location,
-            admissible_commands=action_space
+            admissible_commands=action_space,
         )
 
         verbose_obs = expand_observation_verbose(
@@ -307,7 +307,9 @@ async def run_episode(
         "task_type": tracker.inferred_task_type or game_type,
         "game_file": game_file,
         "state": "success" if success else "fail",
-        "fail_reason": "" if success else ("reached_max_steps" if t >= max_steps else "unknown"),
+        "fail_reason": (
+            "" if success else ("reached_max_steps" if t >= max_steps else "unknown")
+        ),
         "num_turns": len(trajectory),
         "total_tokens": total_tokens,
         "trajectory": trajectory,
@@ -388,8 +390,10 @@ async def test_difficulty_level_async(
     avg_tokens = sum(test_tokens) / len(test_tokens)
     should_skip = avg_tokens < min_avg_tokens or acceptable_count == 0
 
-    print(f"    Test results: avg_tokens={avg_tokens:.0f}, acceptable={acceptable_count}/{len(test_tokens)}, "
-          f"decision={'SKIP (too short)' if should_skip else 'CONTINUE (good length)'}")
+    print(
+        f"    Test results: avg_tokens={avg_tokens:.0f}, acceptable={acceptable_count}/{len(test_tokens)}, "
+        f"decision={'SKIP (too short)' if should_skip else 'CONTINUE (good length)'}"
+    )
 
     return should_skip, avg_tokens, acceptable_count
 
@@ -403,7 +407,7 @@ async def generate_single_episode_async(
     mode: str = "validate",
 ) -> Optional[Dict[str, Any]]:
     """Generate a single episode: build game and run rollout together.
-    
+
     Args:
         game_type: Type of game
         difficulty_name: Difficulty level name
@@ -411,27 +415,23 @@ async def generate_single_episode_async(
         seed: Seed for this episode
         request_infos: TextWorld environment info settings
         mode: Generation mode
-    
+
     Returns:
         Generated episode or None if failed
     """
     temp_dir = None
     env = None
-    
+
     try:
         temp_dir = tempfile.mkdtemp()
         game_dir = Path(temp_dir) / f"game_{seed}"
-        
+
         game_file, _ = await asyncio.to_thread(
-            build_game,
-            out_dir=game_dir,
-            cfg=cfg,
-            seed=seed,
-            game_type=game_type
+            build_game, out_dir=game_dir, cfg=cfg, seed=seed, game_type=game_type
         )
-        
+
         env = textworld.start(game_file, request_infos=request_infos)
-        
+
         base_steps = 100 + cfg.quest_length * 15
         if difficulty_name in ["mega", "ultra"]:
             max_steps = min(base_steps, 2500)
@@ -439,9 +439,9 @@ async def generate_single_episode_async(
             max_steps = min(base_steps, 1500)
         else:
             max_steps = min(base_steps, 1000)
-        
+
         episode_id = f"{game_type}_{difficulty_name}_{seed}"
-        
+
         episode = await run_episode(
             env=env,
             max_steps=max_steps,
@@ -452,19 +452,19 @@ async def generate_single_episode_async(
             difficulty_name=difficulty_name,
             mode=mode,
         )
-        
+
         return episode
-        
+
     except Exception as e:
         return None
-        
+
     finally:
         if env:
             try:
                 env.close()
             except Exception:
                 pass
-        
+
         if temp_dir:
             try:
                 shutil.rmtree(temp_dir)
@@ -483,7 +483,7 @@ async def generate_trajectories_batch_async(
 ) -> List[Dict[str, Any]]:
     """Generate multiple trajectories concurrently.
     Each episode builds its game and runs rollout together.
-    
+
     Args:
         game_type: Type of game
         difficulty_name: Difficulty level name
@@ -492,7 +492,7 @@ async def generate_trajectories_batch_async(
         request_infos: TextWorld environment info settings
         mode: Generation mode
         max_concurrent: Maximum number of episodes to run concurrently
-    
+
     Returns:
         List of generated episodes (excluding None/failed episodes)
     """
@@ -507,18 +507,18 @@ async def generate_trajectories_batch_async(
         )
         for seed in seeds
     ]
-    
+
     results = []
     for i in range(0, len(tasks), max_concurrent):
-        batch_tasks = tasks[i:i + max_concurrent]
+        batch_tasks = tasks[i : i + max_concurrent]
         batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-        
+
         for result in batch_results:
             if isinstance(result, Exception):
                 continue
             elif result is not None:
                 results.append(result)
-    
+
     return results
 
 
@@ -528,27 +528,29 @@ def choose_difficulty_for_bins(
 ) -> Tuple[int, str]:
     """
     Choose difficulty based on which bins need filling with variance.
-    
+
     Strategy (with bias towards harder difficulties for larger bins):
     - 4K, 8K bins: easy or medium (quick success = short)
     - 16K bin: medium or medium_hard
     - 32K bin: medium_hard or hard
     - 64K bin: very_hard or extreme (high variance, longer episodes)
     - 128K bin: extreme, ultra, or mega (maximum variance and length)
-    
+
     Returns:
         (difficulty_idx, reason)
     """
     import random
-    
-    unfilled_bins = [(name, 10 - count) for name, count in bin_counts.items() if count < 10]
-    
+
+    unfilled_bins = [
+        (name, 10 - count) for name, count in bin_counts.items() if count < 10
+    ]
+
     if not unfilled_bins:
         return 0, "all_full"
-    
+
     unfilled_bins.sort(key=lambda x: x[1], reverse=True)
     most_needed_bin = unfilled_bins[0][0]
-    
+
     bin_to_difficulty_options = {
         "4K": [(0, 0.7), (1, 0.3)],
         "8K": [(0, 0.6), (1, 0.4)],
@@ -557,17 +559,20 @@ def choose_difficulty_for_bins(
         "64K": [(4, 0.4), (5, 0.4), (6, 0.2)],
         "128K": [(5, 0.2), (6, 0.4), (7, 0.4)],
     }
-    
+
     difficulty_options = bin_to_difficulty_options.get(most_needed_bin, [(1, 1.0)])
     difficulty_indices = [idx for idx, _ in difficulty_options]
     weights = [weight for _, weight in difficulty_options]
-    
+
     target_idx = random.choices(difficulty_indices, weights=weights)[0]
     target_idx = min(target_idx, len(difficulty_levels) - 1)
-    
+
     difficulty_name = difficulty_levels[target_idx][0]
-    
-    return target_idx, f"targeting_{most_needed_bin}_needs_{10-bin_counts[most_needed_bin]}_more_using_{difficulty_name}"
+
+    return (
+        target_idx,
+        f"targeting_{most_needed_bin}_needs_{10-bin_counts[most_needed_bin]}_more_using_{difficulty_name}",
+    )
 
 
 def generate_trajectories_for_game_type(
@@ -597,7 +602,9 @@ def generate_trajectories_for_game_type(
     episodes = []
     difficulty_levels = get_difficulty_levels(game_type)
 
-    bins = [TokenBin(b.name, b.min_tokens, b.max_tokens, 0, b.target) for b in TOKEN_BINS]
+    bins = [
+        TokenBin(b.name, b.min_tokens, b.max_tokens, 0, b.target) for b in TOKEN_BINS
+    ]
     bin_counts = {b.name: 0 for b in bins}
 
     game_output_dir = output_dir / game_type
@@ -619,69 +626,83 @@ def generate_trajectories_for_game_type(
     max_concurrent = 20
     attempts_per_difficulty = {}
     max_attempts_per_bin = 30
-    
+
     while generated_count < target_count:
-        difficulty_idx, reason = choose_difficulty_for_bins(bin_counts, difficulty_levels)
+        difficulty_idx, reason = choose_difficulty_for_bins(
+            bin_counts, difficulty_levels
+        )
         difficulty_name, cfg = difficulty_levels[difficulty_idx]
-        
+
         if difficulty_name not in attempts_per_difficulty:
             attempts_per_difficulty[difficulty_name] = 0
             print(f"\n→ Selected difficulty: {difficulty_name} ({reason})")
             print(f"   Current bin status: {dict(bin_counts)}\n")
-        
+
         if attempts_per_difficulty[difficulty_name] >= max_attempts_per_bin:
-            print(f"⚠ Max attempts reached for {difficulty_name}, forcing next batch...")
-        
+            print(
+                f"⚠ Max attempts reached for {difficulty_name}, forcing next batch..."
+            )
+
         batch_seeds = list(range(seed, seed + batch_size))
         attempts_per_difficulty[difficulty_name] += batch_size
-        
+
         try:
-            print(f"Generating batch of {batch_size} episodes at {difficulty_name} (seeds {seed}-{seed+batch_size-1})...")
-            batch_episodes = asyncio.run(generate_trajectories_batch_async(
-                game_type=game_type,
-                difficulty_name=difficulty_name,
-                cfg=cfg,
-                seeds=batch_seeds,
-                request_infos=request_infos,
-                mode=mode,
-                max_concurrent=max_concurrent,
-            ))
-            
+            print(
+                f"Generating batch of {batch_size} episodes at {difficulty_name} (seeds {seed}-{seed+batch_size-1})..."
+            )
+            batch_episodes = asyncio.run(
+                generate_trajectories_batch_async(
+                    game_type=game_type,
+                    difficulty_name=difficulty_name,
+                    cfg=cfg,
+                    seeds=batch_seeds,
+                    request_infos=request_infos,
+                    mode=mode,
+                    max_concurrent=max_concurrent,
+                )
+            )
+
             for episode in batch_episodes:
                 token_count = episode["total_tokens"]
                 token_bin = find_token_bin(token_count, bins)
-                
+
                 if token_bin and bin_counts[token_bin.name] < 10:
                     episodes.append(episode)
                     bin_counts[token_bin.name] += 1
                     generated_count += 1
-                    
-                    output_file = game_output_dir / f"{game_type}_{generated_count-1}.json"
+
+                    output_file = (
+                        game_output_dir / f"{game_type}_{generated_count-1}.json"
+                    )
                     with open(output_file, "w", encoding="utf-8") as f:
                         json.dump(episode, f, ensure_ascii=False, indent=2)
-                    
-                    print(f"✓ Generated {generated_count}/{target_count}: "
-                          f"{episode['episode_id']} | "
-                          f"{episode['state']} | "
-                          f"Turns: {episode['num_turns']} | "
-                          f"Tokens: {token_count:,} ({token_bin.name}) | "
-                          f"Saved: {output_file.name}")
-                    
+
+                    print(
+                        f"✓ Generated {generated_count}/{target_count}: "
+                        f"{episode['episode_id']} | "
+                        f"{episode['state']} | "
+                        f"Turns: {episode['num_turns']} | "
+                        f"Tokens: {token_count:,} ({token_bin.name}) | "
+                        f"Saved: {output_file.name}"
+                    )
+
                     if generated_count % 10 == 0:
                         print(f"\n  Bin Status: {dict(bin_counts)}\n")
-                    
+
                     if generated_count >= target_count:
                         break
                 elif token_bin and bin_counts[token_bin.name] >= 10:
-                    print(f"✗ Skipped (bin {token_bin.name} is full: {bin_counts[token_bin.name]}/10, tokens: {token_count:,})")
+                    print(
+                        f"✗ Skipped (bin {token_bin.name} is full: {bin_counts[token_bin.name]}/10, tokens: {token_count:,})"
+                    )
                 elif not token_bin:
                     print(f"✗ Skipped (tokens {token_count:,} out of range)")
-                    
+
         except Exception as e:
             print(f"✗ Error generating batch (seeds {seed}-{seed+batch_size-1}): {e}")
-        
+
         seed += batch_size
-    
+
     # Print final statistics
     print(f"\n{'='*60}")
     print(f"Completed {game_type}: {generated_count} trajectories")
@@ -689,33 +710,33 @@ def generate_trajectories_for_game_type(
     for bin_name, count in sorted(bin_counts.items()):
         print(f"  {bin_name}: {count} trajectories")
     print(f"{'='*60}\n")
-    
+
     return episodes
 
 
 def main():
     """Main entry point for batch generation."""
     import sys
-    
+
     # Parse command line arguments
     mode = "validate"  # default
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
             if arg.startswith("mode="):
                 mode = arg.split("=", 1)[1]
-    
+
     output_base_dir = Path("tw_out_batch").resolve()
     output_base_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Game types and their targets
     game_configs = [
         ("coin_collector", 60, 1000),
         ("cooking", 60, 2000),
         ("treasure_hunter", 60, 3000),
     ]
-    
+
     all_episodes = []
-    
+
     for game_type, target_count, base_seed in game_configs:
         episodes = generate_trajectories_for_game_type(
             game_type=game_type,
@@ -725,28 +746,28 @@ def main():
             mode=mode,
         )
         all_episodes.extend(episodes)
-    
+
     # Save all trajectories to a single JSONL file for easy loading
     output_file = output_base_dir / "all_trajectories.jsonl"
     with open(output_file, "w", encoding="utf-8") as f:
         for episode in all_episodes:
             f.write(json.dumps(episode, ensure_ascii=False) + "\n")
-    
+
     # Note: Individual JSON files have already been saved during generation
     print(f"\nAll trajectories also saved to: {output_file}")
-    
+
     # Generate summary statistics
     print(f"\n{'='*60}")
     print("GENERATION SUMMARY")
     print(f"{'='*60}")
     print(f"Total trajectories generated: {len(all_episodes)}")
-    
+
     # Count by game type
     print("\nBy game type:")
     for game_type in ["coin_collector", "cooking", "treasure_hunter"]:
         count = sum(1 for e in all_episodes if e["task_type"] == game_type)
         print(f"  {game_type}: {count}")
-    
+
     # Count by token bins
     print("\nBy token bins (across all game types):")
     overall_bin_counts = defaultdict(int)
@@ -755,22 +776,30 @@ def main():
         bin_obj = find_token_bin(token_count, TOKEN_BINS)
         if bin_obj:
             overall_bin_counts[bin_obj.name] += 1
-    
+
     for bin_name in ["4K", "8K", "16K", "32K", "64K", "128K"]:
         count = overall_bin_counts[bin_name]
         print(f"  {bin_name}: {count}")
-    
+
     # Success rate
     success_count = sum(1 for e in all_episodes if e["state"] == "success")
     success_rate = (success_count / len(all_episodes) * 100) if all_episodes else 0
     print(f"\nSuccess rate: {success_rate:.1f}% ({success_count}/{len(all_episodes)})")
-    
+
     # Average tokens and turns
-    avg_tokens = sum(e["total_tokens"] for e in all_episodes) / len(all_episodes) if all_episodes else 0
-    avg_turns = sum(e["num_turns"] for e in all_episodes) / len(all_episodes) if all_episodes else 0
+    avg_tokens = (
+        sum(e["total_tokens"] for e in all_episodes) / len(all_episodes)
+        if all_episodes
+        else 0
+    )
+    avg_turns = (
+        sum(e["num_turns"] for e in all_episodes) / len(all_episodes)
+        if all_episodes
+        else 0
+    )
     print(f"Average tokens: {avg_tokens:,.0f}")
     print(f"Average turns: {avg_turns:.1f}")
-    
+
     print(f"\nOutput saved to: {output_base_dir}")
     print(f"{'='*60}\n")
 

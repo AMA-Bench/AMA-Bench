@@ -5,39 +5,39 @@ This module provides two key functions:
 1. memory_construction: Build state memory from trajectory
 2. memory_retrieve: Retrieve relevant context for answering questions
 """
-from typing import Any, Dict, Optional
 
-from src.method.base_method import BaseMethod
-from src.method.ama_agent_core.construct import construct_state_memory
-from src.method.ama_agent_core.retrieve import memory_retrieve as _do_retrieve
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, override
+
+from .ama_agent_core.construct import construct_state_memory
+from .ama_agent_core.retrieve import memory_retrieve as _do_retrieve
+from .base import *
 
 
-class AMAAgentMemory:
+@dataclass
+class AMAAgentConfig(BaseConfig):
+    """Configuration for AMA-Agent method"""
+
+    temperature: float = 0
+    chunk_size: int = 2048
+    session_size: int = 16384
+    top_k: int = 5
+    causal: bool = False
+
+
+@dataclass
+class AMAAgentMemory(BaseMemory):
     """Memory object for AMA-Agent method"""
 
-    def __init__(self, memory_data: Dict[str, Any]):
-        """
-        Initialize memory from constructed memory data.
+    state_mem: str
+    text_mem: Dict[str, Any]
+    trajectory: str
+    causal_graph: List[Dict[str, Any]] = None  # None if causal=False
+    embed_mem: Dict[str, Any] = None  # None if embedding_engine not provided
 
-        Args:
-            memory_data: Dictionary containing state_mem, causal_graph,
-                         text_mem, embed_mem, trajectory
-        """
-        self.state_mem = memory_data.get('state_mem')
-        self.causal_graph = memory_data.get('causal_graph')  # None if causal=False
-        self.text_mem = memory_data.get('text_mem')
-        self.embed_mem = memory_data.get('embed_mem')  # None if embed_engine not provided
-        self.trajectory = memory_data.get('trajectory')
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert memory to dictionary for retrieval."""
-        return {
-            'state_mem': self.state_mem,
-            'causal_graph': self.causal_graph,
-            'text_mem': self.text_mem,
-            'embed_mem': self.embed_mem,
-            'trajectory': self.trajectory
-        }
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "AMAAgentMemory":
+        return cls(**d)
 
 
 class AMAAgentMethod(BaseMethod):
@@ -52,41 +52,47 @@ class AMAAgentMethod(BaseMethod):
 
     def __init__(
         self,
-        config_path: Optional[str] = None,
-        client: Optional[Any] = None,
-        embedding_engine: Optional[Any] = None
+        config_path: os.PathLike = None,
+        client: ModelClient = None,
+        embedding_engine: EmbeddingEngine = None,
     ):
-        config = self._load_config(config_path)
-        self.temperature = config.get('temperature', 0)
-        self.chunk_size = config.get('chunk_size', 2048)
-        self.session_size = config.get('session_size', 16384)
-        self.top_k = config.get('top_k', 5)
-        self.causal = config.get('causal', False)
+        super().__init__(
+            config_path=config_path, client=client, embedding_engine=embedding_engine
+        )
 
-        self.client = client
-        self.embedding_engine = embedding_engine
+        self.config = self._parse_config()
 
         # max_tokens and max_model_length come from the LLM config, not method config
-        llm_cfg = client.config if (client is not None and hasattr(client, 'config')) else {}
-        vllm_launch = llm_cfg.get('vllm_launch', {})
-        self.max_tokens = (
-            llm_cfg.get('max_tokens')
-            or vllm_launch.get('max_response_len', 8192)
+        llm_cfg = (
+            client.config if (client is not None and hasattr(client, "config")) else {}
         )
-        self.max_model_length = (
-            llm_cfg.get('max_model_len')
-            or vllm_launch.get('max_model_len', 131072)
+        vllm_launch = llm_cfg.get("vllm_launch", {})
+        self.max_tokens = llm_cfg.get("max_tokens") or vllm_launch.get(
+            "max_response_len", 8192
+        )
+        self.max_model_length = llm_cfg.get("max_model_len") or vllm_launch.get(
+            "max_model_len", 131072
         )
 
     def _call_llm(self, prompt: str) -> tuple:
         """Synchronous LLM call using the provided client."""
         response = self.client.query(
-                prompt,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens
-            )
-        return None, response 
+            prompt, temperature=self.config.temperature, max_tokens=self.max_tokens
+        )
+        return None, response
 
+    @override
+    def _parse_config(self) -> AMAAgentConfig:
+        config_dict = self._load_config(self.config_path)
+        return AMAAgentConfig(
+            temperature=config_dict.get("temperature"),
+            chunk_size=config_dict.get("chunk_size"),
+            session_size=config_dict.get("session_size"),
+            top_k=config_dict.get("top_k"),
+            causal=config_dict.get("causal"),
+        )
+
+    @override
     def memory_construction(self, traj_text: str, task: str = "") -> AMAAgentMemory:
         """
         Build structured state memory from trajectory text.
@@ -107,13 +113,14 @@ class AMAAgentMethod(BaseMethod):
             trajectory_text=traj_text,
             task=task,
             call_llm_func=self._call_llm,
-            chunk_size=self.chunk_size,
-            session_size=self.session_size,
+            chunk_size=self.config.chunk_size,
+            session_size=self.config.session_size,
             embed_engine=self.embedding_engine,
-            causal=self.causal
+            causal=self.config.causal,
         )
-        return AMAAgentMemory(memory_data)
+        return AMAAgentMemory.from_dict(memory_data)
 
+    @override
     def memory_retrieve(self, memory: AMAAgentMemory, question: str) -> str:
         """
         Retrieve relevant context from memory to answer a question.
@@ -132,10 +139,10 @@ class AMAAgentMethod(BaseMethod):
             Retrieved context string
         """
         return _do_retrieve(
-            memory=memory.to_dict(),
+            memory=asdict(memory),
             question=question,
             call_llm_func=self._call_llm,
-            top_k=self.top_k,
+            top_k=self.config.top_k,
             embed_engine=self.embedding_engine,
             max_context_length=self.max_model_length - self.max_tokens,
         )

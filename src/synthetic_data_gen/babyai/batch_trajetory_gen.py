@@ -2,11 +2,11 @@
 BabyAI Batch Trajectory Generation with Difficulty Levels
 
 Usage:
-python batch_trajetory_gen.py 
-    --difficulty hard_large 
-    --random_ratio 0     
-    --observation_format natural     
-    --traj_per_bin 2     
+python batch_trajetory_gen.py
+    --difficulty hard_large
+    --random_ratio 0
+    --observation_format natural
+    --traj_per_bin 2
     --output_dir babyai_out_batch
 """
 
@@ -40,10 +40,26 @@ try:
 except ImportError:
     print("Warning: minigrid.core.constants not found, using default constants")
     _IDX_TO_OBJECT = {
-        0: "unseen", 1: "empty", 2: "wall", 3: "floor", 4: "door",
-        5: "key", 6: "ball", 7: "box", 8: "goal", 9: "lava", 10: "agent",
+        0: "unseen",
+        1: "empty",
+        2: "wall",
+        3: "floor",
+        4: "door",
+        5: "key",
+        6: "ball",
+        7: "box",
+        8: "goal",
+        9: "lava",
+        10: "agent",
     }
-    _IDX_TO_COLOR = {0: "red", 1: "green", 2: "blue", 3: "purple", 4: "yellow", 5: "grey"}
+    _IDX_TO_COLOR = {
+        0: "red",
+        1: "green",
+        2: "blue",
+        3: "purple",
+        4: "yellow",
+        5: "grey",
+    }
     _IDX_TO_STATE = {0: "open", 1: "closed", 2: "locked"}
 
 
@@ -61,6 +77,7 @@ ACTION_ID_TO_NAME = {
 @dataclass
 class DifficultyConfig:
     """Configuration for a difficulty level"""
+
     env_ids: List[str]
     max_steps: int
 
@@ -68,6 +85,7 @@ class DifficultyConfig:
 @dataclass
 class TokenBin:
     """Token bin for categorizing trajectories by length"""
+
     name: str
     min_tokens: int
     max_tokens: int
@@ -103,39 +121,82 @@ def get_difficulty_levels() -> List[Tuple[str, DifficultyConfig]]:
     ordered from easy to hard.
     """
     return [
-        ("easy", DifficultyConfig(
-            env_ids=["BabyAI-GoToLocal-v0", "BabyAI-GoToObj-v0",
-                     "BabyAI-GoToRedBall-v0", "BabyAI-GoToRedBallGrey-v0"],
-            max_steps=128,
-        )),
-        ("medium", DifficultyConfig(
-            env_ids=["BabyAI-PutNextLocal-v0", "BabyAI-PickupLoc-v0",
-                     "BabyAI-GoToSeq-v0", "BabyAI-Synth-v0"],
-            max_steps=256,
-        )),
-        ("medium_hard", DifficultyConfig(
-            env_ids=["BabyAI-GoToImpUnlock-v0", "BabyAI-UnblockPickup-v0",
-                     "BabyAI-Unlock-v0", "BabyAI-KeyCorridor-v0"],
-            max_steps=384,
-        )),
-        ("hard", DifficultyConfig(
-            env_ids=["BabyAI-SynthLoc-v0", "BabyAI-SynthSeq-v0",
-                     "BabyAI-ActionObjDoor-v0", "BabyAI-FindObjS7-v0",
-                     "BabyAI-UnlockPickup-v0", "BabyAI-BlockedUnlockPickup-v0"],
-            max_steps=1024,  # Increased to allow longer trajectories
-        )),
-        ("hard_large", DifficultyConfig(
-            # Larger environments for generating longer trajectories
-            env_ids=["BabyAI-FindObjS7-v0", "BabyAI-GoToObjMazeS7-v0",
-                     "BabyAI-PutNextS7N4-v0", "BabyAI-GoToLocalS8N4-v0",
-                     "BabyAI-GoToLocalS8N5-v0", "BabyAI-MoveTwoAcrossS8N9-v0"],
-            max_steps=2048,  # Even more steps for large environments
-        )),
-        ("very_hard", DifficultyConfig(
-            env_ids=["BabyAI-MiniBossLevel-v0", "BabyAI-BossLevel-v0",
-                     "BabyAI-BossLevelNoUnlock-v0"],
-            max_steps=1024,
-        )),
+        (
+            "easy",
+            DifficultyConfig(
+                env_ids=[
+                    "BabyAI-GoToLocal-v0",
+                    "BabyAI-GoToObj-v0",
+                    "BabyAI-GoToRedBall-v0",
+                    "BabyAI-GoToRedBallGrey-v0",
+                ],
+                max_steps=128,
+            ),
+        ),
+        (
+            "medium",
+            DifficultyConfig(
+                env_ids=[
+                    "BabyAI-PutNextLocal-v0",
+                    "BabyAI-PickupLoc-v0",
+                    "BabyAI-GoToSeq-v0",
+                    "BabyAI-Synth-v0",
+                ],
+                max_steps=256,
+            ),
+        ),
+        (
+            "medium_hard",
+            DifficultyConfig(
+                env_ids=[
+                    "BabyAI-GoToImpUnlock-v0",
+                    "BabyAI-UnblockPickup-v0",
+                    "BabyAI-Unlock-v0",
+                    "BabyAI-KeyCorridor-v0",
+                ],
+                max_steps=384,
+            ),
+        ),
+        (
+            "hard",
+            DifficultyConfig(
+                env_ids=[
+                    "BabyAI-SynthLoc-v0",
+                    "BabyAI-SynthSeq-v0",
+                    "BabyAI-ActionObjDoor-v0",
+                    "BabyAI-FindObjS7-v0",
+                    "BabyAI-UnlockPickup-v0",
+                    "BabyAI-BlockedUnlockPickup-v0",
+                ],
+                max_steps=1024,  # Increased to allow longer trajectories
+            ),
+        ),
+        (
+            "hard_large",
+            DifficultyConfig(
+                # Larger environments for generating longer trajectories
+                env_ids=[
+                    "BabyAI-FindObjS7-v0",
+                    "BabyAI-GoToObjMazeS7-v0",
+                    "BabyAI-PutNextS7N4-v0",
+                    "BabyAI-GoToLocalS8N4-v0",
+                    "BabyAI-GoToLocalS8N5-v0",
+                    "BabyAI-MoveTwoAcrossS8N9-v0",
+                ],
+                max_steps=2048,  # Even more steps for large environments
+            ),
+        ),
+        (
+            "very_hard",
+            DifficultyConfig(
+                env_ids=[
+                    "BabyAI-MiniBossLevel-v0",
+                    "BabyAI-BossLevel-v0",
+                    "BabyAI-BossLevelNoUnlock-v0",
+                ],
+                max_steps=1024,
+            ),
+        ),
     ]
 
 
@@ -227,7 +288,7 @@ def _decode_image_to_grid(image: Any, direction: int) -> str:
     H, W, _ = arr.shape
     grid_lines = []
     dir_str = _DIRECTION_TO_STR.get(direction, "unknown")
-    
+
     for i in range(H):
         row = []
         for j in range(W):
@@ -257,7 +318,7 @@ def _decode_image_to_grid(image: Any, direction: int) -> str:
             else:
                 row.append("?")
         grid_lines.append("".join(row))
-    
+
     grid_str = "\n".join(grid_lines)
     return f"Grid view (H={H}, W={W}):\n{grid_str}\nYou are facing {dir_str}."
 
@@ -296,7 +357,9 @@ def _decode_image_to_detailed(image: Any, direction: int) -> str:
             color = (color + " ") if color else ""
             if obj == "door":
                 state = _IDX_TO_STATE.get(s, "closed")
-                items_by_pos.append(f"{color}{obj} ({state}) at position ({i}, {j})".strip())
+                items_by_pos.append(
+                    f"{color}{obj} ({state}) at position ({i}, {j})".strip()
+                )
             else:
                 items_by_pos.append(f"{color}{obj} at position ({i}, {j})".strip())
 
@@ -307,18 +370,20 @@ def _decode_image_to_detailed(image: Any, direction: int) -> str:
         parts.append("Objects in view: " + "; ".join(items_by_pos))
     else:
         parts.append("No objects visible in the immediate view.")
-    
+
     dir_str = _DIRECTION_TO_STR.get(direction, "unknown")
     parts.append(f"Facing direction: {dir_str}")
-    
+
     return "\n".join(parts)
 
 
-def format_observation(obs: Any, mission: str = "", observation_format: str = "natural") -> str:
+def format_observation(
+    obs: Any, mission: str = "", observation_format: str = "natural"
+) -> str:
     """
     Format observation as human-readable text.
     Converts the grid (obs['image']) to text; keeps mission and direction.
-    
+
     Args:
         obs: Observation dictionary
         mission: Mission string
@@ -403,7 +468,9 @@ def _discover_and_make_babyai_bot(env: Any) -> Any:
             "Could not import minigrid, please install with: pip install minigrid"
         ) from e
 
-    for _, modname, _ in pkgutil.walk_packages(minigrid.__path__, minigrid.__name__ + "."):
+    for _, modname, _ in pkgutil.walk_packages(
+        minigrid.__path__, minigrid.__name__ + "."
+    ):
         name_low = modname.lower()
         if "bot" not in name_low:
             continue
@@ -422,23 +489,33 @@ def _discover_and_make_babyai_bot(env: Any) -> Any:
 def _random_action_fn(random_ratio: float = 1.0) -> Callable[[Any, Any], int]:
     """
     Return a pure random action function.
-    
+
     Args:
         random_ratio: Probability of taking a random action (1.0 = pure random)
     """
-    valid_actions = [0, 1, 2, 3, 4, 5, 6]  # left, right, forward, pickup, drop, toggle, done
-    
+    valid_actions = [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+    ]  # left, right, forward, pickup, drop, toggle, done
+
     def action_fn(_obs: Any, _prev_action: Optional[int]) -> int:
         return random.choice(valid_actions)
-    
+
     return action_fn
 
 
-def _bot_action_fn(bot: Any, random_ratio: float = 0.0, use_pure_random: bool = False) -> Callable[[Any, Any], int]:
+def _bot_action_fn(
+    bot: Any, random_ratio: float = 0.0, use_pure_random: bool = False
+) -> Callable[[Any, Any], int]:
     """
     Return (obs, prev_action) -> action_id. BabyAIBot uses replan(prev_action);
     other bots use act(obs) / get_action(obs). prev_action is int or None.
-    
+
     Args:
         bot: The bot instance (ignored if use_pure_random=True)
         random_ratio: Probability of taking a random action instead of bot action (0.0-1.0)
@@ -446,35 +523,42 @@ def _bot_action_fn(bot: Any, random_ratio: float = 0.0, use_pure_random: bool = 
     """
     if use_pure_random:
         return _random_action_fn()
-    
+
     def _extract_action(action: Any) -> int:
         """Extract action from tuple/list if needed."""
         if isinstance(action, (tuple, list)):
             return int(action[0])
         return int(action)
-    
+
     # Valid actions: left, right, forward, pickup, drop, toggle, done
     valid_actions = [0, 1, 2, 3, 4, 5, 6]
-    
+
     # BabyAIBot.replan(prev_action) must be called after env.reset(); it does not use obs.
     if hasattr(bot, "replan") and callable(getattr(bot, "replan")):
         fn = getattr(bot, "replan")
+
         def action_fn(_obs: Any, prev_action: Optional[int]) -> int:
             if random.random() < random_ratio:
                 return random.choice(valid_actions)
             return _extract_action(fn(prev_action))
+
         return action_fn
 
     for method_name in ["get_action", "act", "step", "predict"]:
         if hasattr(bot, method_name) and callable(getattr(bot, method_name)):
             fn = getattr(bot, method_name)
+
             # Use a closure to capture fn, random_ratio, valid_actions, and _extract_action
-            def make_action_fn(bot_fn: Callable, ratio: float, actions: List[int], extract_fn: Callable) -> Callable:
+            def make_action_fn(
+                bot_fn: Callable, ratio: float, actions: List[int], extract_fn: Callable
+            ) -> Callable:
                 def action_fn(obs: Any, _prev_action: Optional[int]) -> int:
                     if random.random() < ratio:
                         return random.choice(actions)
                     return extract_fn(bot_fn(obs))
+
                 return action_fn
+
             return make_action_fn(fn, random_ratio, valid_actions, _extract_action)
 
     raise RuntimeError("Bot has no get_action, act, step, predict, or replan")
@@ -509,6 +593,7 @@ def generate_qa_pairs(
     # Try to import and use the actual QA generator
     try:
         from babyai_qa_generator import generate_qa_for_trajectory
+
         trajectory_data = {
             "trajectory": trajectory,
             "task": task,
@@ -552,14 +637,16 @@ def run_single_episode(
         # Set random seeds for reproducibility
         random.seed(seed)
         np.random.seed(seed)
-        
+
         obs, _ = env.reset(seed=seed)
         mission = obs.get("mission", "") if isinstance(obs, dict) else ""
         if use_pure_random:
             action_fn = _random_action_fn()
         else:
             bot = _discover_and_make_babyai_bot(env)
-            action_fn = _bot_action_fn(bot, random_ratio=random_ratio, use_pure_random=False)
+            action_fn = _bot_action_fn(
+                bot, random_ratio=random_ratio, use_pure_random=False
+            )
 
         trajectory: List[Dict[str, Any]] = []
         total_reward = 0.0
@@ -569,26 +656,28 @@ def run_single_episode(
                 # Add timeout protection for action_fn call using threading
                 action_result = [None]
                 action_exception = [None]
-                
+
                 def action_wrapper():
                     try:
                         action_result[0] = action_fn(obs, prev_action)
                     except Exception as e:
                         action_exception[0] = e
-                
+
                 action_thread = threading.Thread(target=action_wrapper)
                 action_thread.daemon = True
                 action_thread.start()
                 action_thread.join(timeout=5.0)  # 5 second timeout
-                
+
                 if action_thread.is_alive():
                     # Thread is still running, timeout occurred
-                    print(f"  Warning: action_fn timed out at step {t} in {env_id}, returning None")
+                    print(
+                        f"  Warning: action_fn timed out at step {t} in {env_id}, returning None"
+                    )
                     return None
-                
+
                 if action_exception[0] is not None:
                     raise action_exception[0]
-                
+
                 action_id = action_result[0]
                 if action_id is None:
                     return None
@@ -598,11 +687,15 @@ def run_single_episode(
             action_name = ACTION_ID_TO_NAME.get(action_id, str(action_id))
             obs_next, reward, terminated, truncated, _ = env.step(action_id)
             total_reward += float(reward) if reward is not None else 0.0
-            trajectory.append({
-                "turn_idx": t,
-                "action": action_name,
-                "observation": format_observation(obs, mission, observation_format=observation_format),
-            })
+            trajectory.append(
+                {
+                    "turn_idx": t,
+                    "action": action_name,
+                    "observation": format_observation(
+                        obs, mission, observation_format=observation_format
+                    ),
+                }
+            )
 
             obs = obs_next
             prev_action = action_id
@@ -619,12 +712,16 @@ def run_single_episode(
             "task_type": env_id,
             "difficulty": difficulty_name,
             "state": "success" if success else "fail",
-            "fail_reason": "" if success else ("truncated" if truncated else "reached_max_steps"),
+            "fail_reason": (
+                "" if success else ("truncated" if truncated else "reached_max_steps")
+            ),
             "success": success,
             "num_turns": len(trajectory),
             "total_tokens": total_tokens,
             "trajectory": trajectory,
-            "qa_pairs": generate_qa_pairs(trajectory, mission, env_id, difficulty_name, seed=seed),
+            "qa_pairs": generate_qa_pairs(
+                trajectory, mission, env_id, difficulty_name, seed=seed
+            ),
             "summary": {},
             "summary_scores": {},
             "source": "babyai",
@@ -650,7 +747,7 @@ def run_single_episode_standalone(
 ) -> Optional[Dict[str, Any]]:
     """
     Run a single episode with its own environment instance.
-    
+
     Args:
         env_id: Environment ID
         difficulty_name: Difficulty level name
@@ -659,7 +756,7 @@ def run_single_episode_standalone(
         episode_num: Episode number
         random_ratio: Probability of taking random action (0.0-1.0)
         observation_format: Observation format ("natural", "grid", or "detailed")
-    
+
     Returns:
         Episode dict with task, trajectory, and metadata, or None if failed
     """
@@ -669,7 +766,7 @@ def run_single_episode_standalone(
     except Exception as e:
         print(f"  Error importing dependencies in episode {episode_num}: {e}")
         return None
-    
+
     env = None
     try:
         env = gym.make(env_id)
@@ -711,7 +808,7 @@ def generate_trajectories_for_bin(
     Generate trajectories for a specific token bin.
     Continues generating until we have enough trajectories in the target bin.
     Uses adaptive parameters for larger bins to generate longer trajectories.
-    
+
     Args:
         include_failures: If True, accept failed trajectories (they're often longer)
     """
@@ -723,7 +820,7 @@ def generate_trajectories_for_bin(
     consecutive_wrong_bin = 0
     MAX_CONSECUTIVE_FAILURES = 100
     MAX_CONSECUTIVE_WRONG_BIN = 300  # Increased for larger bins
-    
+
     # Adaptive parameters for larger bins (16K+)
     is_large_bin = target_bin.min_tokens >= 8193
     bin_size_multiplier = {
@@ -735,7 +832,7 @@ def generate_trajectories_for_bin(
     }
     multiplier = bin_size_multiplier.get(target_bin.name, 1.0)
     adaptive_max_steps = int(cfg.max_steps * multiplier)
-    
+
     # For larger bins, use high random ratio and larger environments
     if is_large_bin:
         adaptive_random_ratio = 0.9
@@ -746,41 +843,49 @@ def generate_trajectories_for_bin(
                 adaptive_max_steps = int(cfg.max_steps * (multiplier / 2.5))
                 break
     else:
-        adaptive_random_ratio = min(0.8, random_ratio + (multiplier-1) * 0.5)
-    
-    print(f"  Generating for bin {target_bin.name} ({target_bin.min_tokens:,}-{target_bin.max_tokens:,} tokens)...")
-    print(f"    Using adaptive max_steps: {adaptive_max_steps}, random_ratio: {adaptive_random_ratio:.2f}")
+        adaptive_random_ratio = min(0.8, random_ratio + (multiplier - 1) * 0.5)
+
+    print(
+        f"  Generating for bin {target_bin.name} ({target_bin.min_tokens:,}-{target_bin.max_tokens:,} tokens)..."
+    )
+    print(
+        f"    Using adaptive max_steps: {adaptive_max_steps}, random_ratio: {adaptive_random_ratio:.2f}"
+    )
     if is_large_bin:
         print(f"    Using high random ratio and larger environments")
     if include_failures:
         print(f"    Accepting both success and failure trajectories")
-    
+
     for attempt in range(1, max_attempts + 1):
         if len(episodes) >= traj_per_bin:
             break
-        
+
         env_id = cfg.env_ids[env_idx]
         env_idx = (env_idx + 1) % len(cfg.env_ids)
-        
+
         episode = run_single_episode_standalone(
-            env_id, difficulty_name, seed_counter, adaptive_max_steps, len(episodes),
+            env_id,
+            difficulty_name,
+            seed_counter,
+            adaptive_max_steps,
+            len(episodes),
             random_ratio=adaptive_random_ratio,
             observation_format=observation_format,
             use_pure_random=is_large_bin,
         )
         seed_counter += 1
-        
+
         if episode is None:
             consecutive_failures += 1
             if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                 print(f"    ⚠ Stopping: {consecutive_failures} consecutive failures")
                 break
             continue
-        
+
         consecutive_failures = 0
         token_count = episode["total_tokens"]
         token_bin = find_token_bin(token_count, [target_bin])
-        
+
         # Accept episodes that fall into the target bin
         # If include_failures is True, accept both success and failure
         # If False, only accept success (but failures are often longer, so useful for large bins)
@@ -789,26 +894,38 @@ def generate_trajectories_for_bin(
                 episodes.append(episode)
                 consecutive_wrong_bin = 0  # Reset counter on success
                 status_icon = "✓" if episode["success"] else "✗"
-                print(f"    {status_icon} [{len(episodes)}/{traj_per_bin}] {episode['state']} | "
-                      f"Turns: {episode['num_turns']} | Tokens: {token_count:,} ({target_bin.name})")
+                print(
+                    f"    {status_icon} [{len(episodes)}/{traj_per_bin}] {episode['state']} | "
+                    f"Turns: {episode['num_turns']} | Tokens: {token_count:,} ({target_bin.name})"
+                )
             else:
                 # Episode in right bin but failed, and we don't accept failures
                 consecutive_wrong_bin += 1
                 if attempt % 20 == 0:
-                    print(f"    ... Attempt {attempt}: episode failed (tokens {token_count:,} in bin {target_bin.name})")
+                    print(
+                        f"    ... Attempt {attempt}: episode failed (tokens {token_count:,} in bin {target_bin.name})"
+                    )
         else:
             # Token count out of target bin range, skip
             consecutive_wrong_bin += 1
             if consecutive_wrong_bin >= MAX_CONSECUTIVE_WRONG_BIN:
-                print(f"    ⚠ Stopping: {consecutive_wrong_bin} consecutive episodes not in target bin {target_bin.name}")
-                print(f"    Last token count: {token_count:,} (target: {target_bin.min_tokens:,}-{target_bin.max_tokens:,})")
+                print(
+                    f"    ⚠ Stopping: {consecutive_wrong_bin} consecutive episodes not in target bin {target_bin.name}"
+                )
+                print(
+                    f"    Last token count: {token_count:,} (target: {target_bin.min_tokens:,}-{target_bin.max_tokens:,})"
+                )
                 break
             if attempt % 20 == 0:
-                print(f"    ... Attempt {attempt}: tokens {token_count:,} not in bin {target_bin.name} (need {target_bin.min_tokens:,}-{target_bin.max_tokens:,})")
-    
+                print(
+                    f"    ... Attempt {attempt}: tokens {token_count:,} not in bin {target_bin.name} (need {target_bin.min_tokens:,}-{target_bin.max_tokens:,})"
+                )
+
     if len(episodes) < traj_per_bin:
-        print(f"    ⚠ Warning: Only generated {len(episodes)}/{traj_per_bin} trajectories for bin {target_bin.name}")
-    
+        print(
+            f"    ⚠ Warning: Only generated {len(episodes)}/{traj_per_bin} trajectories for bin {target_bin.name}"
+        )
+
     return episodes
 
 
@@ -827,19 +944,25 @@ def generate_trajectories_for_config(
     Generates trajectories for each token bin (8K, 16K, 32K, 64K, 128K).
     """
     # Create filename prefix with parameter abbreviations
-    diff_abbr = {"easy": "e", "medium": "m", "medium_hard": "mh"}.get(difficulty_name, difficulty_name[:2])
+    diff_abbr = {"easy": "e", "medium": "m", "medium_hard": "mh"}.get(
+        difficulty_name, difficulty_name[:2]
+    )
     ratio_abbr = f"r{int(random_ratio * 10)}"  # r0, r1, r2 for 0.0, 0.1, 0.2
-    format_abbr = {"natural": "nat", "grid": "grd"}.get(observation_format, observation_format[:3])
-    
+    format_abbr = {"natural": "nat", "grid": "grd"}.get(
+        observation_format, observation_format[:3]
+    )
+
     print(f"\n{'='*60}")
-    print(f"Configuration: {difficulty_name} | Random: {random_ratio} | Format: {observation_format}")
+    print(
+        f"Configuration: {difficulty_name} | Random: {random_ratio} | Format: {observation_format}"
+    )
     print(f"File prefix: {diff_abbr}_{ratio_abbr}_{format_abbr}")
     print(f"Trajectories per bin: {traj_per_bin}")
     print(f"{'='*60}\n")
 
     all_episodes = []
     current_seed = base_seed
-    
+
     # Generate trajectories for each bin
     for bin_obj in bins:
         include_failures = bin_obj.min_tokens >= 8193  # 16K+ accept failures
@@ -854,20 +977,26 @@ def generate_trajectories_for_config(
             traj_per_bin=traj_per_bin,
             include_failures=include_failures,
         )
-        
+
         # Save each episode to a separate file
         for idx, episode in enumerate(bin_episodes):
-            filename = f"{diff_abbr}_{ratio_abbr}_{format_abbr}_{bin_obj.name}_{idx}.json"
+            filename = (
+                f"{diff_abbr}_{ratio_abbr}_{format_abbr}_{bin_obj.name}_{idx}.json"
+            )
             output_file = output_dir / filename
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(episode, f, ensure_ascii=False, indent=2)
-        
+
         all_episodes.extend(bin_episodes)
         current_seed += len(bin_episodes) * 10  # Increment seed for next bin
-        
-        print(f"  ✓ Bin {bin_obj.name}: {len(bin_episodes)}/{traj_per_bin} trajectories generated\n")
-    
-    print(f"  Completed: {len(all_episodes)} total trajectories across {len(bins)} bins\n")
+
+        print(
+            f"  ✓ Bin {bin_obj.name}: {len(bin_episodes)}/{traj_per_bin} trajectories generated\n"
+        )
+
+    print(
+        f"  Completed: {len(all_episodes)} total trajectories across {len(bins)} bins\n"
+    )
     return all_episodes
 
 
@@ -879,39 +1008,39 @@ def main() -> None:
         "--output_dir",
         type=str,
         default="babyai_out_batch",
-        help="Output directory for generated trajectories"
+        help="Output directory for generated trajectories",
     )
     parser.add_argument(
         "--difficulty",
         type=str,
         required=True,
         choices=["easy", "medium", "medium_hard", "hard", "very_hard", "hard_large"],
-        help="Difficulty level: easy, medium, medium_hard, hard, very_hard, or hard_large"
+        help="Difficulty level: easy, medium, medium_hard, hard, very_hard, or hard_large",
     )
     parser.add_argument(
         "--random_ratio",
         type=float,
         required=True,
-        help="Probability of taking random action (0.0-1.0, e.g., 0.0, 0.1, 0.2)"
+        help="Probability of taking random action (0.0-1.0, e.g., 0.0, 0.1, 0.2)",
     )
     parser.add_argument(
         "--observation_format",
         type=str,
         required=True,
         choices=["natural", "grid"],
-        help="Observation format: 'natural' or 'grid'"
+        help="Observation format: 'natural' or 'grid'",
     )
     parser.add_argument(
         "--traj_per_bin",
         type=int,
         required=True,
-        help="Number of trajectories to generate per token bin"
+        help="Number of trajectories to generate per token bin",
     )
     parser.add_argument(
         "--seed",
         type=int,
         default=42,
-        help="Base random seed for trajectory generation (default: 42)"
+        help="Base random seed for trajectory generation (default: 42)",
     )
     args = parser.parse_args()
 
@@ -934,7 +1063,7 @@ def main() -> None:
         if name == args.difficulty:
             difficulty_config = (name, cfg)
             break
-    
+
     if difficulty_config is None:
         print(f"Error: Difficulty level '{args.difficulty}' not found")
         return
@@ -942,7 +1071,10 @@ def main() -> None:
     difficulty_name, cfg = difficulty_config
 
     # Use 5 token bins (8K, 16K, 32K, 64K, 128K)
-    bins = [TokenBin(b.name, b.min_tokens, b.max_tokens, 0, args.traj_per_bin) for b in TOKEN_BINS]
+    bins = [
+        TokenBin(b.name, b.min_tokens, b.max_tokens, 0, args.traj_per_bin)
+        for b in TOKEN_BINS
+    ]
 
     print(f"\n{'='*60}")
     print("CONFIGURATION")
@@ -974,15 +1106,17 @@ def main() -> None:
     print(f"{'='*60}")
     print(f"Total trajectories generated: {len(all_episodes)}")
     print(f"Expected: {len(bins) * args.traj_per_bin}")
-    
+
     if all_episodes:
         success_count = sum(1 for e in all_episodes if e["state"] == "success")
         fail_count = len(all_episodes) - success_count
         success_rate = success_count / len(all_episodes) * 100
         avg_tokens = sum(e["total_tokens"] for e in all_episodes) / len(all_episodes)
-        print(f"Success: {success_count} | Failed: {fail_count} | Success rate: {success_rate:.1f}%")
+        print(
+            f"Success: {success_count} | Failed: {fail_count} | Success rate: {success_rate:.1f}%"
+        )
         print(f"Average tokens: {avg_tokens:,.0f}")
-        
+
         # Token bins distribution
         bin_counts_summary = defaultdict(int)
         for episode in all_episodes:
@@ -993,7 +1127,7 @@ def main() -> None:
         for bin_obj in bins:
             count = bin_counts_summary.get(bin_obj.name, 0)
             print(f"  {bin_obj.name}: {count}/{args.traj_per_bin}")
-    
+
     print(f"\nOutput directory: {output_base_dir}")
     print(f"{'='*60}\n")
 

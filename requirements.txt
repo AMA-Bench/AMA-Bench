@@ -43,3 +43,6 @@ textworld
 
 # Evaluation metrics
 rouge-score>=0.1.2
+
+# Development and testing
+pre-commit

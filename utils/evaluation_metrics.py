@@ -14,8 +14,8 @@ Usage:
 """
 
 import re
-from typing import Optional, List, Set
 from collections import Counter
+from typing import List, Optional, Set
 
 
 def normalize_text(text: str) -> str:
@@ -29,11 +29,11 @@ def normalize_text(text: str) -> str:
     """
     text = text.lower()
     # Remove punctuation
-    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r"[^\w\s]", " ", text)
     # Remove articles
-    text = re.sub(r'\b(a|an|the)\b', ' ', text)
+    text = re.sub(r"\b(a|an|the)\b", " ", text)
     # Normalize whitespace
-    text = ' '.join(text.split())
+    text = " ".join(text.split())
     return text
 
 
@@ -87,7 +87,9 @@ def compute_f1_score(predicted: str, golden: str) -> float:
     return f1
 
 
-def compute_numeric_accuracy(predicted: str, golden: str, tolerance: float = 1e-6) -> float:
+def compute_numeric_accuracy(
+    predicted: str, golden: str, tolerance: float = 1e-6
+) -> float:
     """
     Compute accuracy for numeric answers.
 
@@ -97,8 +99,8 @@ def compute_numeric_accuracy(predicted: str, golden: str, tolerance: float = 1e-
         1.0 if numbers match within tolerance, 0.0 otherwise, or falls back to exact match if no numbers found
     """
     # Extract numbers from strings
-    pred_numbers = re.findall(r'-?\d+\.?\d*', predicted)
-    gold_numbers = re.findall(r'-?\d+\.?\d*', golden)
+    pred_numbers = re.findall(r"-?\d+\.?\d*", predicted)
+    gold_numbers = re.findall(r"-?\d+\.?\d*", golden)
 
     if not pred_numbers or not gold_numbers:
         # Fall back to exact match if no numbers found
@@ -147,9 +149,9 @@ def compute_llm_as_judge(
         context_parts.append(f"Episode ID: {episode_id}")
     if task_description:
         context_parts.append(f"Task Context: {task_description}")
-    
+
     context_str = "\n".join(context_parts) if context_parts else ""
-    
+
     judge_prompt = f"""You are an expert evaluator. You will be given a question, a reference answer, and a predicted answer.
 Your task is to determine if the predicted answer is correct based on:
 1. Factual correctness compared to the reference
@@ -171,30 +173,34 @@ Answer:<think></think>"""
     try:
         # Increase max_tokens to handle potential thinking tags and ensure complete response
         response = judge_client.query(judge_prompt, temperature=0.0, max_tokens=2048)
-        
+
         # Remove thinking tags if present (some models use <think>...</think>)
-        response_cleaned = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL | re.IGNORECASE)
+        response_cleaned = re.sub(
+            r"<think>.*?</think>", "", response, flags=re.DOTALL | re.IGNORECASE
+        )
         response_cleaned = response_cleaned.strip()
-        
+
         # Extract the last occurrence of yes or no (case-insensitive)
         # This handles cases where model explains before answering
         response_lower = response_cleaned.lower()
-        
+
         # Find all matches of "yes" or "no" as complete words
-        yes_matches = list(re.finditer(r'\byes\b', response_lower))
-        no_matches = list(re.finditer(r'\bno\b', response_lower))
-        
+        yes_matches = list(re.finditer(r"\byes\b", response_lower))
+        no_matches = list(re.finditer(r"\bno\b", response_lower))
+
         # Determine which comes last
         last_yes_pos = yes_matches[-1].start() if yes_matches else -1
         last_no_pos = no_matches[-1].start() if no_matches else -1
-        
+
         if last_yes_pos > last_no_pos:
             return 1.0
         elif last_no_pos > last_yes_pos:
             return 0.0
         else:
             # Fallback to F1 if no valid response
-            print(f"Warning: Could not parse LLM judge response: '{response}'. Falling back to F1 score.")
+            print(
+                f"Warning: Could not parse LLM judge response: '{response}'. Falling back to F1 score."
+            )
             return compute_f1_score(predicted_answer, golden_answer)
     except Exception as e:
         print(f"Error: LLM judge failed: {e}")
@@ -212,8 +218,8 @@ def compute_multi_choice_accuracy(predicted: str, golden: str) -> float:
         1.0 if correct, 0.0 otherwise
     """
     # Extract first digit/number from both
-    pred_match = re.search(r'\d+', predicted)
-    gold_match = re.search(r'\d+', golden)
+    pred_match = re.search(r"\d+", predicted)
+    gold_match = re.search(r"\d+", golden)
 
     if pred_match and gold_match:
         pred_num = pred_match.group()

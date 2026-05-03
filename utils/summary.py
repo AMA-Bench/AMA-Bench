@@ -1,7 +1,7 @@
 """Summary and reporting utilities for evaluation results."""
 
-from typing import List
 from collections import defaultdict
+from typing import List
 
 from utils.qa_result import QAResult
 
@@ -42,17 +42,19 @@ def print_summary(
 
     # LLM judge metrics
     if llm_as_judge != "none":
-        llm_scores = [r.llm_judge_score for r in results if r.llm_judge_score is not None]
+        llm_scores = [
+            r.llm_judge_score for r in results if r.llm_judge_score is not None
+        ]
         if llm_scores:
             avg_llm = sum(llm_scores) / len(llm_scores)
             accuracy = sum(1 for s in llm_scores if s >= 0.5) / len(llm_scores)
             print(f"Average LLM Judge Score: {avg_llm:.4f}")
-            print(f"LLM Judge Accuracy: {accuracy:.4f} ({sum(1 for s in llm_scores if s >= 0.5)}/{len(llm_scores)})")
+            print(
+                f"LLM Judge Accuracy: {accuracy:.4f} ({sum(1 for s in llm_scores if s >= 0.5)}/{len(llm_scores)})"
+            )
 
     print(f"Total time: {total_time:.2f}s")
     print(f"Average time per QA: {total_time/len(results):.2f}s")
-
-
 
     # Per QA type
     _print_qa_type_metrics(results, llm_as_judge)
@@ -88,7 +90,9 @@ def _print_qa_type_metrics(results: List[QAResult], llm_as_judge: str):
 
         if llm_as_judge != "none" and metrics["llm_judge"]:
             avg_llm = sum(metrics["llm_judge"]) / len(metrics["llm_judge"])
-            llm_accuracy = sum(1 for s in metrics["llm_judge"] if s >= 0.5) / len(metrics["llm_judge"])
+            llm_accuracy = sum(1 for s in metrics["llm_judge"] if s >= 0.5) / len(
+                metrics["llm_judge"]
+            )
             metrics_str += f", LLM Judge={avg_llm:.4f}, Accuracy={llm_accuracy:.4f}"
 
         metrics_str += f" (n={len(metrics['em'])})"
@@ -120,13 +124,15 @@ def print_compact_summary(results: List[QAResult], llm_as_judge: str = "none"):
                 qa_type_metrics[r.qa_type]["llm_judge"].append(r.llm_judge_score)
 
     print("\nCompact Format:")
-    print("="*70)
+    print("=" * 70)
 
     # F1 scores
     f1_scores = []
-    for qa_type in ['A', 'B', 'C', 'D']:
+    for qa_type in ["A", "B", "C", "D"]:
         if qa_type in qa_type_metrics and qa_type_metrics[qa_type]["f1"]:
-            avg_f1 = sum(qa_type_metrics[qa_type]["f1"]) / len(qa_type_metrics[qa_type]["f1"])
+            avg_f1 = sum(qa_type_metrics[qa_type]["f1"]) / len(
+                qa_type_metrics[qa_type]["f1"]
+            )
             f1_scores.append(f"{avg_f1:.4f}")
         else:
             f1_scores.append("N/A")
@@ -144,15 +150,21 @@ def print_compact_summary(results: List[QAResult], llm_as_judge: str = "none"):
     # LLM judge scores
     if llm_as_judge != "none":
         llm_scores = []
-        for qa_type in ['A', 'B', 'C', 'D']:
+        for qa_type in ["A", "B", "C", "D"]:
             if qa_type in qa_type_metrics and qa_type_metrics[qa_type]["llm_judge"]:
-                avg_llm = sum(qa_type_metrics[qa_type]["llm_judge"]) / len(qa_type_metrics[qa_type]["llm_judge"])
+                avg_llm = sum(qa_type_metrics[qa_type]["llm_judge"]) / len(
+                    qa_type_metrics[qa_type]["llm_judge"]
+                )
                 llm_scores.append(f"{avg_llm:.4f}")
             else:
                 llm_scores.append("N/A")
 
         # Calculate average
-        all_llm = [r.llm_judge_score for r in results if r.llm_judge_score is not None and r.qa_type]
+        all_llm = [
+            r.llm_judge_score
+            for r in results
+            if r.llm_judge_score is not None and r.qa_type
+        ]
         if all_llm:
             avg_llm = sum(all_llm) / len(all_llm)
             llm_scores.append(f"{avg_llm:.4f}")
@@ -161,4 +173,4 @@ def print_compact_summary(results: List[QAResult], llm_as_judge: str = "none"):
 
         print(f"LLM-as-judge score(A,B,C,D,ave): {','.join(llm_scores)}")
 
-    print("="*70)
+    print("=" * 70)

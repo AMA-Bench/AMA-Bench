@@ -1,20 +1,24 @@
 """
 Utility functions for memory agent
 """
-import json
+
 import asyncio
+import json
+import math
 import os
+import re
+import shutil
 import signal
 import subprocess
-import shutil
 import sys
 import tempfile
-import re
-import math
-from typing import Any, Callable, Dict, List, Optional, Tuple
-from pathlib import Path
 from collections import Counter
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import ray
+
+from utils.evaluation_metrics import tokenize
 
 
 def load(file_path: str) -> Dict[str, Any]:
@@ -41,21 +45,21 @@ def load(file_path: str) -> Dict[str, Any]:
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     result = {
-        'trajectory': data.get('trajectory', []),
-        'task': data.get('task', ''),
-        'episode_id': data.get('episode_id', ''),
-        'task_type': data.get('task_type', ''),
-        'state': data.get('state', ''),
-        'fail_reason': data.get('fail_reason', ''),
-        'num_turns': data.get('num_turns', 0),
-        'total_tokens': data.get('total_tokens', 0),
-        'qa_pairs': data.get('qa_pairs', []),
-        'state_snapshots': data.get('state_snapshots', []),
-        'events': data.get('events', []),
+        "trajectory": data.get("trajectory", []),
+        "task": data.get("task", ""),
+        "episode_id": data.get("episode_id", ""),
+        "task_type": data.get("task_type", ""),
+        "state": data.get("state", ""),
+        "fail_reason": data.get("fail_reason", ""),
+        "num_turns": data.get("num_turns", 0),
+        "total_tokens": data.get("total_tokens", 0),
+        "qa_pairs": data.get("qa_pairs", []),
+        "state_snapshots": data.get("state_snapshots", []),
+        "events": data.get("events", []),
     }
 
     return result
@@ -67,7 +71,7 @@ def _ensure_ray_initialized() -> None:
     """
     if ray.is_initialized():
         return
-    
+
     init_kwargs = {
         "ignore_reinit_error": True,
         "include_dashboard": False,
@@ -87,29 +91,27 @@ def _ensure_ray_initialized() -> None:
     ray_spill_dir = "/tmp/verl_spill"
     os.makedirs(ray_tmp_dir, exist_ok=True)
     os.makedirs(ray_spill_dir, exist_ok=True)
-    
+
     init_kwargs["_temp_dir"] = ray_tmp_dir
-    spilling_conf = {"type": "filesystem", "params": {"directory_path": [ray_spill_dir]}}
+    spilling_conf = {
+        "type": "filesystem",
+        "params": {"directory_path": [ray_spill_dir]},
+    }
     init_kwargs["_system_config"] = {
         "object_spilling_config": json.dumps(spilling_conf)
     }
-    
+
     ray.init(**init_kwargs)
 
 
-
-
-async def _run_python_script(
-    script: str,
-    timeout: float = 40.0
-) -> str:
+async def _run_python_script(script: str, timeout: float = 40.0) -> str:
     """
     Execute Python script in isolated environment with timeout.
-    
+
     Args:
         script: Python script content to execute
         timeout: Maximum execution time in seconds
-        
+
     Returns:
         Script output as string, or "timeout" if execution exceeds timeout
     """
@@ -130,7 +132,9 @@ async def _run_python_script(
 
         env = os.environ.copy()
 
-        workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+        workspace_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../..")
+        )
         venv_python = os.path.join(workspace_root, "pettingllms_venv/bin/python")
         python_executable = venv_python if os.path.exists(venv_python) else "python"
 
@@ -165,7 +169,7 @@ async def _run_python_script(
             result = f"error: {stderr_str}\n\nSTDOUT:\n{stdout_str}"
         else:
             result = stdout_str
-        
+
     except asyncio.TimeoutError:
         if proc and proc.pid:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
@@ -182,24 +186,24 @@ async def _run_python_script(
                 os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             proc.kill()
             await asyncio.wait_for(proc.wait(), timeout=2.0)
-        
+
         if os.path.exists(tmpdir):
             shutil.rmtree(tmpdir, ignore_errors=True)
             if os.path.exists(tmpdir):
-                subprocess.run(['rm', '-rf', tmpdir], timeout=5, capture_output=True)
-    
+                subprocess.run(["rm", "-rf", tmpdir], timeout=5, capture_output=True)
+
     return result
 
 
 def get_ray_worker_cls(num_workers=180):
     """
     Get or create the Ray worker class for MemAgent operations.
-    
+
     Returns a Ray remote actor class that can execute Python scripts.
-    
+
     Args:
         num_workers: Number of workers to create (used for CPU allocation)
-    
+
     Returns:
         Ray remote actor class
     """
@@ -211,10 +215,13 @@ def get_ray_worker_cls(num_workers=180):
 
     try:
         import multiprocessing
+
         total_cpus = multiprocessing.cpu_count()
         cpus_per_worker = min(4.0, (total_cpus * 0.6) / num_workers)
-        print(f"Ray worker resource allocation: total_cpus={total_cpus}, num_workers={num_workers}, "
-              f"cpus_per_worker={cpus_per_worker:.3f}")
+        print(
+            f"Ray worker resource allocation: total_cpus={total_cpus}, num_workers={num_workers}, "
+            f"cpus_per_worker={cpus_per_worker:.3f}"
+        )
     except Exception:
         cpus_per_worker = 0.001
 
@@ -238,11 +245,11 @@ def get_ray_worker_cls(num_workers=180):
         ) -> str:
             """
             Execute Python script and return output.
-            
+
             Args:
                 script: Python script to execute
                 timeout: Execution timeout
-                
+
             Returns:
                 Script execution output as string
             """
@@ -287,6 +294,7 @@ def cosine_similarity(vec1, vec2) -> float:
         return dot_product / (norm1 * norm2)
     else:
         import numpy as np
+
         vec1 = np.array(vec1)
         vec2 = np.array(vec2)
         return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
@@ -298,10 +306,7 @@ def cosine_similarity(vec1, vec2) -> float:
 
 
 async def retrieve_with_llm(
-    query: str,
-    state_mem: Dict[str, Any],
-    text_mem: Dict[str, Any],
-    call_llm_func
+    query: str, state_mem: Dict[str, Any], text_mem: Dict[str, Any], call_llm_func
 ) -> Tuple[Dict[str, Any], List[int]]:
     """
     Retrieve using LLM to extract keywords.
@@ -354,16 +359,24 @@ Only output the JSON:"""
                 keyword_clean = keyword_clean[:-3]
             keyword_clean = keyword_clean.strip()
             keywords_info = json.loads(keyword_clean)
-            keywords_info['method'] = 'llm'
+            keywords_info["method"] = "llm"
         except:
-            keywords_info = {"keywords": [query], "search_mode": "keyword", "method": "llm"}
+            keywords_info = {
+                "keywords": [query],
+                "search_mode": "keyword",
+                "method": "llm",
+            }
 
-    trajectory_text_json = json.dumps(text_mem['trajectory_data'])
-    keywords = keywords_info.get('keywords', [query])
+    trajectory_text_json = json.dumps(text_mem["trajectory_data"])
+    keywords = keywords_info.get("keywords", [query])
     relevant_turn_indices = []
 
     for keyword in keywords:
-        indices = traj_find(trajectory_text_json, keyword, mode=keywords_info.get('search_mode', 'keyword'))
+        indices = traj_find(
+            trajectory_text_json,
+            keyword,
+            mode=keywords_info.get("search_mode", "keyword"),
+        )
         relevant_turn_indices.extend(indices)
 
     relevant_turn_indices = sorted(list(set(relevant_turn_indices)))[:5]
@@ -372,10 +385,7 @@ Only output the JSON:"""
 
 
 async def retrieve_with_embed(
-    query: str,
-    text_mem: Dict[str, Any],
-    embed_mem: Dict[str, Any],
-    embed_engine
+    query: str, text_mem: Dict[str, Any], embed_mem: Dict[str, Any], embed_engine
 ) -> Tuple[Dict[str, Any], List[int]]:
     """
     Retrieve using embedding-based similarity.
@@ -394,15 +404,15 @@ async def retrieve_with_embed(
     else:
         query_embedding = embed_engine(query)
 
-    turn_embeddings = embed_mem['embeddings']
-    turn_texts = embed_mem['turn_texts']
+    turn_embeddings = embed_mem["embeddings"]
+    turn_texts = embed_mem["turn_texts"]
 
     similarities = []
-    trajectory = text_mem['trajectory_data']['trajectory']
+    trajectory = text_mem["trajectory_data"]["trajectory"]
 
     for i, turn_emb in enumerate(turn_embeddings):
         similarity = cosine_similarity(query_embedding, turn_emb)
-        turn_idx = trajectory[i].get('turn_idx', i)
+        turn_idx = trajectory[i].get("turn_idx", i)
         similarities.append((turn_idx, similarity))
 
     similarities.sort(key=lambda x: x[1], reverse=True)
@@ -413,7 +423,7 @@ async def retrieve_with_embed(
     keywords_info = {
         "keywords": query_tokens[:5],
         "search_mode": "embed",
-        "method": "embed"
+        "method": "embed",
     }
 
     return keywords_info, relevant_turn_indices
@@ -434,41 +444,41 @@ def fallback_retrieve(query: str, trajectory_text_json: str) -> str:
 
     indices = traj_find(trajectory_text_json, query, mode="keyword")
     if indices:
-        return traj_get(trajectory_text_json, span={'indices': indices})
+        return traj_get(trajectory_text_json, span={"indices": indices})
     return ""
 
 
 def extract_state_memory_from_response(llm_response: str) -> Optional[str]:
     """Extract state memory content from LLM response after **STATE_MEMORY** marker.
-    
+
     Args:
         llm_response: The LLM response text
-        
+
     Returns:
         The content after **STATE_MEMORY** marker, or None if marker not found
     """
     if not llm_response:
         return None
-    
+
     # Look for **STATE_MEMORY** marker
     marker = "**STATE_MEMORY**"
     marker_pos = llm_response.find(marker)
-    
+
     if marker_pos == -1:
         # Try case-insensitive search
         marker_pos = llm_response.upper().find(marker)
         if marker_pos == -1:
             return None
-    
+
     # Extract everything after the marker
-    state_mem = llm_response[marker_pos + len(marker):].strip()
-    
+    state_mem = llm_response[marker_pos + len(marker) :].strip()
+
     return state_mem if state_mem else None
 
 
 def extract_code_from_response(llm_response: str) -> str:
     """Extract Python code from LLM response by removing think tags and extracting code blocks.
-    
+
     Supports multiple formats:
     1. **CODE**: ```python ... ``` (preferred format)
     2. ```python ... ``` (legacy format)
@@ -480,21 +490,29 @@ def extract_code_from_response(llm_response: str) -> str:
     llm_response_clean = llm_response.strip()
 
     # Remove <think>...</think> blocks
-    llm_response_clean = re.sub(r'<think>.*?</think>', '', llm_response_clean, flags=re.DOTALL)
+    llm_response_clean = re.sub(
+        r"<think>.*?</think>", "", llm_response_clean, flags=re.DOTALL
+    )
     llm_response_clean = llm_response_clean.strip()
 
     # Try to extract code from **CODE**: ```python ... ``` format (preferred)
-    code_marker_match = re.search(r'\*\*CODE\*\*:?\s*```python\s*\n(.*?)\n```', llm_response_clean, re.DOTALL | re.IGNORECASE)
+    code_marker_match = re.search(
+        r"\*\*CODE\*\*:?\s*```python\s*\n(.*?)\n```",
+        llm_response_clean,
+        re.DOTALL | re.IGNORECASE,
+    )
     if code_marker_match:
         return code_marker_match.group(1).strip()
 
     # Try to extract code from ```python ... ``` blocks (legacy)
-    python_code_match = re.search(r'```python\s*\n(.*?)\n```', llm_response_clean, re.DOTALL)
+    python_code_match = re.search(
+        r"```python\s*\n(.*?)\n```", llm_response_clean, re.DOTALL
+    )
     if python_code_match:
         return python_code_match.group(1).strip()
 
     # Try to extract from ``` ... ``` blocks without language specifier (fallback)
-    code_match = re.search(r'```\s*\n(.*?)\n```', llm_response_clean, re.DOTALL)
+    code_match = re.search(r"```\s*\n(.*?)\n```", llm_response_clean, re.DOTALL)
     if code_match:
         return code_match.group(1).strip()
 
@@ -522,13 +540,16 @@ def truncate_trajectory_text(trajectory_text: str, max_length: int) -> str:
     head_length = int(max_length * 0.7)
     tail_length = max_length - head_length
 
-    truncated = trajectory_text[:head_length] + "\n...\n" + trajectory_text[-tail_length:]
+    truncated = (
+        trajectory_text[:head_length] + "\n...\n" + trajectory_text[-tail_length:]
+    )
     return truncated
 
 
 # ============================================================================
 # Trajectory chunk helpers
 # ============================================================================
+
 
 def _extract_chunks(
     trajectory: List[Dict[str, Any]],
@@ -538,42 +559,48 @@ def _extract_chunks(
     index_set = set(turn_indices)
     chunks = [
         {
-            'turn':        t.get('turn_idx', -1),
-            'action':      t.get('action', ''),
-            'observation': t.get('observation', ''),
+            "turn": t.get("turn_idx", -1),
+            "action": t.get("action", ""),
+            "observation": t.get("observation", ""),
         }
         for t in trajectory
-        if t.get('turn_idx', -1) in index_set
+        if t.get("turn_idx", -1) in index_set
     ]
-    chunks.sort(key=lambda x: x['turn'])
+    chunks.sort(key=lambda x: x["turn"])
     return chunks
 
 
 _MAX_OBS_CHARS = 1500  # max observation chars per turn in formatted output
 
-def _format_chunks(chunks: List[Dict[str, Any]], max_obs_chars: int = _MAX_OBS_CHARS) -> str:
+
+def _format_chunks(
+    chunks: List[Dict[str, Any]], max_obs_chars: int = _MAX_OBS_CHARS
+) -> str:
     """Format a list of chunk dicts into a readable string."""
     if not chunks:
         return "No chunks retrieved."
     lines = []
     for chunk in chunks:
-        turn        = chunk.get('turn', 0)
-        action      = chunk.get('action', '')
-        observation = str(chunk.get('observation', ''))
+        turn = chunk.get("turn", 0)
+        action = chunk.get("action", "")
+        observation = str(chunk.get("observation", ""))
         if len(observation) > max_obs_chars:
             observation = observation[:max_obs_chars] + "...[truncated]"
-        lines.extend([
-            f"Turn {turn}:",
-            f"  Action: {action}",
-            f"  Observation: {observation}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"Turn {turn}:",
+                f"  Action: {action}",
+                f"  Observation: {observation}",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
 # ============================================================================
 # Similarity retrieval
 # ============================================================================
+
 
 async def _async_similarity_retrieve(
     question: str,
@@ -601,7 +628,7 @@ async def _async_similarity_retrieve(
                 sims = [
                     (turn_idx, cosine_similarity(query_emb, emb))
                     for turn_idx, emb in zip(
-                        embed_mem['turn_indices'], embed_mem['embeddings']
+                        embed_mem["turn_indices"], embed_mem["embeddings"]
                     )
                 ]
                 sims.sort(key=lambda x: x[1], reverse=True)
@@ -622,11 +649,11 @@ def _bm25_retrieve(
     scores: List[tuple] = []
 
     for turn in trajectory:
-        turn_idx   = turn.get('turn_idx', 0)
-        doc_text   = f"{turn.get('action', '')} {turn.get('observation', '')}".lower()
+        turn_idx = turn.get("turn_idx", 0)
+        doc_text = f"{turn.get('action', '')} {turn.get('observation', '')}".lower()
         doc_tokens = doc_text.split()
-        tf    = Counter(doc_tokens)
-        n     = len(doc_tokens) or 1
+        tf = Counter(doc_tokens)
+        n = len(doc_tokens) or 1
         score = sum(tf.get(tok, 0) / n for tok in query_tokens)
         scores.append((turn_idx, score))
 
@@ -656,7 +683,7 @@ def _similarity_retrieve(
             sims = [
                 (turn_idx, cosine_similarity(query_emb, emb))
                 for turn_idx, emb in zip(
-                    embed_mem['turn_indices'], embed_mem['embeddings']
+                    embed_mem["turn_indices"], embed_mem["embeddings"]
                 )
             ]
             sims.sort(key=lambda x: x[1], reverse=True)
@@ -670,6 +697,7 @@ def _similarity_retrieve(
 # ============================================================================
 # NEED_GRAPH: adjacency / range / index turn retrieval
 # ============================================================================
+
 
 def _retrieve_graph_turns(
     trajectory: List[Dict[str, Any]],
@@ -691,40 +719,39 @@ def _retrieve_graph_turns(
       Individual indices
         NEED_GRAPH: turns 3, 7, 12, 18
     """
-    turn_map: Dict[int, Dict[str, Any]] = {
-        t.get('turn_idx', -1): t for t in trajectory
-    }
+    turn_map: Dict[int, Dict[str, Any]] = {t.get("turn_idx", -1): t for t in trajectory}
     all_indices = sorted(turn_map.keys())
     requested: set = set()
 
     for line in response.splitlines():
         stripped = line.strip()
-        if not re.match(r'NEED_GRAPH\s*:', stripped, re.IGNORECASE):
+        if not re.match(r"NEED_GRAPH\s*:", stripped, re.IGNORECASE):
             continue
 
-        spec = re.sub(r'^NEED_GRAPH\s*:\s*', '', stripped, flags=re.IGNORECASE).strip()
+        spec = re.sub(r"^NEED_GRAPH\s*:\s*", "", stripped, flags=re.IGNORECASE).strip()
 
-        for clause in spec.split(','):
+        for clause in spec.split(","):
             clause = clause.strip()
             if not clause:
                 continue
 
             # Format A: turn_5 before=2 after=1
             m = re.match(
-                r'turn[_\s](\d+)(?:\s+before=(\d+))?(?:\s+after=(\d+))?',
-                clause, re.IGNORECASE
+                r"turn[_\s](\d+)(?:\s+before=(\d+))?(?:\s+after=(\d+))?",
+                clause,
+                re.IGNORECASE,
             )
             if m:
                 center = int(m.group(1))
                 before = int(m.group(2)) if m.group(2) else 0
-                after  = int(m.group(3)) if m.group(3) else 0
+                after = int(m.group(3)) if m.group(3) else 0
                 for idx in all_indices:
                     if center - before <= idx <= center + after:
                         requested.add(idx)
                 continue
 
             # Format B: turns X to Y
-            m = re.match(r'turns?\s+(\d+)\s+to\s+(\d+)', clause, re.IGNORECASE)
+            m = re.match(r"turns?\s+(\d+)\s+to\s+(\d+)", clause, re.IGNORECASE)
             if m:
                 lo, hi = int(m.group(1)), int(m.group(2))
                 for idx in all_indices:
@@ -733,8 +760,8 @@ def _retrieve_graph_turns(
                 continue
 
             # Format C: turns X, Y, Z
-            clause_clean = re.sub(r'^turns?\s*', '', clause, flags=re.IGNORECASE)
-            for n in re.findall(r'\d+', clause_clean):
+            clause_clean = re.sub(r"^turns?\s*", "", clause, flags=re.IGNORECASE)
+            for n in re.findall(r"\d+", clause_clean):
                 idx = int(n)
                 if idx in turn_map:
                     requested.add(idx)
@@ -745,6 +772,7 @@ def _retrieve_graph_turns(
 # ============================================================================
 # NEED_CODE: keyword / code-execution search
 # ============================================================================
+
 
 def _run_keyword_search(
     trajectory_data: Dict[str, Any],
@@ -766,12 +794,12 @@ def _run_keyword_search(
     """
     from .prompt import CODE_GENERATION_PROMPT_TEMPLATE
 
-    trajectory    = trajectory_data.get('trajectory', [])
+    trajectory = trajectory_data.get("trajectory", [])
     sample_chunks = [
         {
-            'turn':        t.get('turn_idx', i),
-            'action':      t.get('action', ''),
-            'observation': t.get('observation', '')[:100],
+            "turn": t.get("turn_idx", i),
+            "action": t.get("action", ""),
+            "observation": t.get("observation", "")[:100],
         }
         for i, t in enumerate(trajectory[:3])
     ]
@@ -783,7 +811,11 @@ def _run_keyword_search(
     if previous_error:
         # Truncate to avoid blowing up context length (errors can contain full trajectory JSON)
         _MAX_ERROR_CHARS = 3000
-        truncated_error = previous_error if len(previous_error) <= _MAX_ERROR_CHARS else previous_error[:_MAX_ERROR_CHARS] + "\n...[truncated]"
+        truncated_error = (
+            previous_error
+            if len(previous_error) <= _MAX_ERROR_CHARS
+            else previous_error[:_MAX_ERROR_CHARS] + "\n...[truncated]"
+        )
         code_prompt += (
             "\n\n**Previous attempt failed with the following error — fix it in your new code:**\n"
             f"```\n{truncated_error}\n```\n"
@@ -811,9 +843,13 @@ def _run_keyword_search(
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(full_script)
 
-        workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+        workspace_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../..")
+        )
         venv_python = os.path.join(workspace_root, "ama_venv", "bin", "python")
-        python_executable = venv_python if os.path.exists(venv_python) else sys.executable
+        python_executable = (
+            venv_python if os.path.exists(venv_python) else sys.executable
+        )
 
         proc = subprocess.run(
             [python_executable, script_path],
@@ -827,8 +863,16 @@ def _run_keyword_search(
             # Cap error output so it never bloats the next code-gen prompt
             _MAX_STDERR = 2000
             _MAX_STDOUT_ERR = 1000
-            _s = stderr_str if len(stderr_str) <= _MAX_STDERR else stderr_str[:_MAX_STDERR] + "\n...[truncated]"
-            _o = stdout_str if len(stdout_str) <= _MAX_STDOUT_ERR else stdout_str[:_MAX_STDOUT_ERR] + "\n...[truncated]"
+            _s = (
+                stderr_str
+                if len(stderr_str) <= _MAX_STDERR
+                else stderr_str[:_MAX_STDERR] + "\n...[truncated]"
+            )
+            _o = (
+                stdout_str
+                if len(stdout_str) <= _MAX_STDOUT_ERR
+                else stdout_str[:_MAX_STDOUT_ERR] + "\n...[truncated]"
+            )
             result = f"error: {_s}\n\nSTDOUT:\n{_o}"
         else:
             result = stdout_str if stdout_str else "Keyword search: empty result."
@@ -838,4 +882,3 @@ def _run_keyword_search(
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     return result
-

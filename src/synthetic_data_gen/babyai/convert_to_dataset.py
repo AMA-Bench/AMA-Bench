@@ -21,12 +21,12 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
-from typing import Optional
 
 # Import QA generator
 import sys
+from pathlib import Path
 from pathlib import Path as PathLib
+from typing import Optional
 
 # Add the script's directory to path to ensure import works from both project root and babyai directory
 _script_dir = PathLib(__file__).parent
@@ -38,7 +38,9 @@ try:
 except ImportError as e:
     # If import still fails, QA generation will be disabled
     print(f"⚠️  Warning: Could not import babyai_qa_generator: {e}")
-    print("   QA generation will be disabled. Make sure babyai_qa_generator.py is in the same directory.")
+    print(
+        "   QA generation will be disabled. Make sure babyai_qa_generator.py is in the same directory."
+    )
     generate_qa_for_trajectory = None
 
 
@@ -77,7 +79,7 @@ def convert(
 
     count = 0
     qa_generated_count = 0
-    
+
     # Determine if input is a file or directory
     input_path = Path(input_path)
     if input_path.is_file():
@@ -92,10 +94,17 @@ def convert(
                 except json.JSONDecodeError as e:
                     print(f"❌ JSON error at line {line_num}: {e}")
                     continue
-                
+
                 count, qa_generated_count = _process_episode(
-                    data, output_dir, prefix, source, target_qa_count,
-                    auto_generate_qa, count, qa_generated_count, seed
+                    data,
+                    output_dir,
+                    prefix,
+                    source,
+                    target_qa_count,
+                    auto_generate_qa,
+                    count,
+                    qa_generated_count,
+                    seed,
                 )
     elif input_path.is_dir():
         # Load from directory of JSON files
@@ -105,8 +114,15 @@ def convert(
                 with open(input_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     count, qa_generated_count = _process_episode(
-                        data, output_dir, prefix, source, target_qa_count,
-                        auto_generate_qa, count, qa_generated_count, seed
+                        data,
+                        output_dir,
+                        prefix,
+                        source,
+                        target_qa_count,
+                        auto_generate_qa,
+                        count,
+                        qa_generated_count,
+                        seed,
                     )
             except Exception as e:
                 print(f"⚠️  Warning: Failed to process {input_file}: {e}")
@@ -140,7 +156,9 @@ def _process_episode(
         qa_pairs = data.get("qa_pairs", [])
         if not qa_pairs or (isinstance(qa_pairs, list) and len(qa_pairs) == 0):
             try:
-                generated_qa = generate_qa_for_trajectory(data, target_count=target_qa_count, seed=seed)
+                generated_qa = generate_qa_for_trajectory(
+                    data, target_count=target_qa_count, seed=seed
+                )
                 data["qa_pairs"] = generated_qa
                 qa_generated_count += 1
             except Exception as e:
@@ -157,7 +175,7 @@ def _process_episode(
     with open(out_path, "w", encoding="utf-8") as out:
         json.dump(data, out, ensure_ascii=False, indent=2)
     print(f"✅ {out_path.name}")
-    
+
     return count, qa_generated_count
 
 
@@ -165,7 +183,7 @@ def main() -> None:
     # Determine if running from project root or babyai directory
     _script_dir = PathLib(__file__).parent
     _cwd = PathLib.cwd()
-    
+
     # Check if we're in the babyai directory (script's parent)
     if _cwd == _script_dir:
         # Running from babyai/ directory
@@ -175,19 +193,21 @@ def main() -> None:
         # Running from project root
         default_input = "memory_data_generation/babyai/babyai_out_batch"
         default_output = "dataset/babyai"
-    
+
     ap = argparse.ArgumentParser(
         description="Convert BabyAI trajectories (JSONL file or directory of JSON files) to dataset JSON files. "
-                    "Automatically generates QA pairs if missing or empty.",
+        "Automatically generates QA pairs if missing or empty.",
     )
     ap.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         type=str,
         default=default_input,
         help=f"Input JSONL (default: {default_input})",
     )
     ap.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=str,
         default=default_output,
         help=f"Output directory (default: {default_output})",
@@ -217,16 +237,18 @@ def main() -> None:
 
     try:
         n = convert(
-            inp, 
-            out, 
+            inp,
+            out,
             target_qa_count=args.target_qa_count,
             auto_generate_qa=not args.no_auto_qa,
-            seed=args.seed
+            seed=args.seed,
         )
         print(f"\n🎉 Wrote {n} files to {out.absolute()}")
     except FileNotFoundError as e:
         print(f"❌ {e}")
-        print("Run batch_trajetory_gen.py first, then analyze_trajectories.py if needed.")
+        print(
+            "Run batch_trajetory_gen.py first, then analyze_trajectories.py if needed."
+        )
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 """I/O utilities for saving and loading evaluation results."""
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import List
-from dataclasses import asdict
 
 from utils.qa_result import QAResult
 
@@ -21,7 +21,7 @@ def save_results(results: List[QAResult], output_path: str):
 
     results_dict = [asdict(r) for r in results]
 
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(results_dict, f, ensure_ascii=False, indent=2)
 
     print(f"✅ Results saved to {output_path}")
@@ -37,7 +37,7 @@ def load_results(input_path: str) -> List[QAResult]:
     Returns:
         List of QAResult objects
     """
-    with open(input_path, 'r', encoding='utf-8') as f:
+    with open(input_path, "r", encoding="utf-8") as f:
         results_dict = json.load(f)
 
     results = []

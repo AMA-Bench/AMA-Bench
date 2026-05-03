@@ -9,25 +9,26 @@ Multi-stage retrieval pipeline (Fig. 8 (B)):
              NEED_CODE   → generate and execute a Python search script.
   Stage 3 — Synthesize all gathered evidence into a final context string.
 """
+
 import json
 import re
-from typing import Any, Callable, Dict, List, Optional
 import time
+from typing import Any, Callable, Dict, List, Optional
 
 from .prompt import CHUNK_SUFFICIENCY_JUDGMENT_PROMPT_TEMPLATE
 from .utils import (
-    _similarity_retrieve,
     _extract_chunks,
     _format_chunks,
     _retrieve_graph_turns,
     _run_keyword_search,
+    _similarity_retrieve,
     truncate_trajectory_text,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Public entry point
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def memory_retrieve(
     memory: Dict[str, Any],
@@ -60,18 +61,20 @@ def memory_retrieve(
     Returns:
         Context string ready to prepend to the answering prompt.
     """
-    state_mem    = memory.get('state_mem', '')
-    text_mem     = memory.get('text_mem', {})
-    embed_mem    = memory.get('embed_mem')
+    state_mem = memory.get("state_mem", "")
+    text_mem = memory.get("text_mem", {})
+    embed_mem = memory.get("embed_mem")
 
-    state_mem_str   = str(state_mem) if state_mem else ""
-    task            = text_mem.get('task', '')
-    trajectory_data = text_mem.get('trajectory_data', {})
-    trajectory      = trajectory_data.get('trajectory', [])
+    state_mem_str = str(state_mem) if state_mem else ""
+    task = text_mem.get("task", "")
+    trajectory_data = text_mem.get("trajectory_data", {})
+    trajectory = trajectory_data.get("trajectory", [])
 
     # ── Stage 1: Similarity retrieval (top_k) ────────────────────────────────────────
     # embed_engine is a synchronous callable — call it directly, no event loop.
-    seed_indices = _similarity_retrieve(question, trajectory, embed_engine, embed_mem, top_k)
+    seed_indices = _similarity_retrieve(
+        question, trajectory, embed_engine, embed_mem, top_k
+    )
 
     # Internal accumulated memory — extended as additional turns are retrieved.
     mem: List[Dict[str, Any]] = _extract_chunks(trajectory, seed_indices)
@@ -144,7 +147,9 @@ def memory_retrieve(
                 previous_error=_prev_error,
                 timeout=_remaining,
             )
-            if not (extra_evidence.startswith("error:") or "Traceback" in extra_evidence):
+            if not (
+                extra_evidence.startswith("error:") or "Traceback" in extra_evidence
+            ):
                 break
             _prev_error = extra_evidence  # feed error to next iteration
 
@@ -220,6 +225,7 @@ def _extract_chunks_from_extra_evidence(extra_evidence: str) -> List[Dict[str, A
         payload = None
 
     if payload is not None:
+
         def _walk(node: Any) -> None:
             if isinstance(node, dict):
                 turn_raw = node.get("turn", node.get("turn_idx"))
@@ -228,11 +234,13 @@ def _extract_chunks_from_extra_evidence(extra_evidence: str) -> List[Dict[str, A
                 except (TypeError, ValueError):
                     turn = None
                 if turn is not None:
-                    chunks.append({
-                        "turn": turn,
-                        "action": str(node.get("action", "")),
-                        "observation": str(node.get("observation", "")),
-                    })
+                    chunks.append(
+                        {
+                            "turn": turn,
+                            "action": str(node.get("action", "")),
+                            "observation": str(node.get("observation", "")),
+                        }
+                    )
                 for v in node.values():
                     _walk(v)
             elif isinstance(node, list):
@@ -249,10 +257,12 @@ def _extract_chunks_from_extra_evidence(extra_evidence: str) -> List[Dict[str, A
         flags=re.IGNORECASE | re.DOTALL,
     )
     for match in pattern.finditer(text):
-        chunks.append({
-            "turn": int(match.group(1)),
-            "action": match.group(2).strip(),
-            "observation": match.group(3).strip()[:500],
-        })
+        chunks.append(
+            {
+                "turn": int(match.group(1)),
+                "action": match.group(2).strip(),
+                "observation": match.group(3).strip()[:500],
+            }
+        )
 
     return chunks

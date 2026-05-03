@@ -1,125 +1,128 @@
 """
 Query tools for state memory retrieval
 """
-import re
+
 import json
-from typing import Dict, List, Any, Optional, Union
+import re
+from typing import Any, Dict, List, Optional, Union
 
 
 def traj_get(
     trajectory_text: str,
     span: Optional[Dict[str, Any]] = None,
     fields: Optional[List[str]] = None,
-    auto_compress: bool = False
+    auto_compress: bool = False,
 ) -> str:
     """
     Get evidence segments from trajectory.
-    
+
     Args:
         trajectory_text: Full trajectory text in JSON format
         span: Optional dict with either {'indices': [1, 2, 3]} or {'start': 1, 'end': 3}
         fields: Optional list of fields to include, default ['action', 'observation', 'action_space']
         auto_compress: Whether to auto-compress the output
-    
+
     Returns:
         Extracted trajectory segment as formatted string
     """
     if fields is None:
-        fields = ['action', 'observation', 'action_space']
-    
+        fields = ["action", "observation", "action_space"]
+
     trajectory_data = json.loads(trajectory_text)
-    trajectory = trajectory_data.get('trajectory', [])
-    
+    trajectory = trajectory_data.get("trajectory", [])
+
     if span is None:
         selected_turns = trajectory
-    elif 'indices' in span:
-        indices = span['indices']
+    elif "indices" in span:
+        indices = span["indices"]
         if not isinstance(indices, list):
             indices = [indices]
-        selected_turns = [turn for turn in trajectory if turn.get('turn_idx') in indices]
-    elif 'start' in span and 'end' in span:
-        start_idx = span['start']
-        end_idx = span['end']
-        selected_turns = [turn for turn in trajectory 
-                         if start_idx <= turn.get('turn_idx', 0) <= end_idx]
+        selected_turns = [
+            turn for turn in trajectory if turn.get("turn_idx") in indices
+        ]
+    elif "start" in span and "end" in span:
+        start_idx = span["start"]
+        end_idx = span["end"]
+        selected_turns = [
+            turn
+            for turn in trajectory
+            if start_idx <= turn.get("turn_idx", 0) <= end_idx
+        ]
     else:
         selected_turns = trajectory
-    
+
     result_lines = []
     for turn in selected_turns:
-        turn_idx = turn.get('turn_idx', 0)
+        turn_idx = turn.get("turn_idx", 0)
         result_lines.append(f"Turn {turn_idx}:")
-        
+
         for field in fields:
             if field in turn:
                 value = turn[field]
                 if auto_compress and isinstance(value, str) and len(value) > 300:
                     value = value[:300] + "..."
                 result_lines.append(f"  {field}: {value}")
-    
+
     return "\n".join(result_lines)
 
 
-def traj_find(
-    trajectory_text: str,
-    query: str,
-    mode: str = "keyword"
-) -> List[int]:
+def traj_find(trajectory_text: str, query: str, mode: str = "keyword") -> List[int]:
     """
     Find turn indices that match the query.
-    
+
     Args:
         trajectory_text: Full trajectory text in JSON format
         query: Query string (keyword, regex, action, entity, room, etc.)
         mode: Search mode - 'keyword', 'regex', 'action', or 'entity'
-    
+
     Returns:
         List of turn indices that match the query
     """
     trajectory_data = json.loads(trajectory_text)
-    trajectory = trajectory_data.get('trajectory', [])
-    
+    trajectory = trajectory_data.get("trajectory", [])
+
     matched_indices = []
-    
+
     for turn in trajectory:
-        turn_idx = turn.get('turn_idx', 0)
+        turn_idx = turn.get("turn_idx", 0)
         matched = False
-        
+
         if mode == "keyword":
             query_lower = query.lower()
-            action = turn.get('action', '').lower()
-            observation = turn.get('observation', '').lower()
+            action = turn.get("action", "").lower()
+            observation = turn.get("observation", "").lower()
             if query_lower in action or query_lower in observation:
                 matched = True
-        
+
         elif mode == "regex":
             pattern = re.compile(query, re.IGNORECASE)
-            action = turn.get('action', '')
-            observation = turn.get('observation', '')
+            action = turn.get("action", "")
+            observation = turn.get("observation", "")
             if pattern.search(action) or pattern.search(observation):
                 matched = True
-        
+
         elif mode == "action":
-            action = turn.get('action', '').lower()
+            action = turn.get("action", "").lower()
             if query.lower() in action:
                 matched = True
-        
+
         elif mode == "entity":
-            action = turn.get('action', '')
-            observation = turn.get('observation', '')
+            action = turn.get("action", "")
+            observation = turn.get("observation", "")
             combined_text = action + " " + observation
             if query in combined_text:
                 matched = True
-        
+
         if matched:
             matched_indices.append(turn_idx)
-    
+
     return matched_indices
+
 
 def get_openai_tools() -> List[Dict[str, Any]]:
     """
     Get tool definitions in OpenAI function calling format.
-    
+
     Returns:
         List of tool definitions compatible with OpenAI's tools parameter
     """
@@ -152,18 +155,18 @@ This tool helps you locate relevant turns before retrieving detailed information
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "The query string to search for. Examples: 'open door', 'key', 'cabinet', 'red', 'living room'"
+                            "description": "The query string to search for. Examples: 'open door', 'key', 'cabinet', 'red', 'living room'",
                         },
                         "mode": {
                             "type": "string",
                             "enum": ["keyword", "regex", "action", "entity"],
                             "description": "Search mode: 'keyword' (default, search anywhere), 'action' (only in action field), 'regex' (pattern matching), 'entity' (specific entity)",
-                            "default": "keyword"
-                        }
+                            "default": "keyword",
+                        },
                     },
-                    "required": ["query"]
-                }
-            }
+                    "required": ["query"],
+                },
+            },
         },
         {
             "type": "function",
@@ -205,48 +208,46 @@ This tool helps you locate relevant turns before retrieving detailed information
                                 "indices": {
                                     "type": "array",
                                     "items": {"type": "integer"},
-                                    "description": "List of specific turn indices to retrieve. Example: [1, 3, 5, 7]"
+                                    "description": "List of specific turn indices to retrieve. Example: [1, 3, 5, 7]",
                                 },
                                 "start": {
                                     "type": "integer",
-                                    "description": "Start turn index (inclusive) for range retrieval. Example: 1"
+                                    "description": "Start turn index (inclusive) for range retrieval. Example: 1",
                                 },
                                 "end": {
                                     "type": "integer",
-                                    "description": "End turn index (inclusive) for range retrieval. Example: 10"
-                                }
-                            }
+                                    "description": "End turn index (inclusive) for range retrieval. Example: 10",
+                                },
+                            },
                         },
                         "fields": {
                             "type": "array",
                             "items": {
                                 "type": "string",
-                                "enum": ["action", "observation", "action_space"]
+                                "enum": ["action", "observation", "action_space"],
                             },
                             "description": "Which fields to include. Options: 'action' (what was done), 'observation' (result/feedback), 'action_space' (available actions). Default: all fields",
-                            "default": ["action", "observation", "action_space"]
-                        }
+                            "default": ["action", "observation", "action_space"],
+                        },
                     },
-                    "required": ["span"]
-                }
-            }
-        }
+                    "required": ["span"],
+                },
+            },
+        },
     ]
 
 
 def execute_tool_call(
-    tool_name: str,
-    arguments: Dict[str, Any],
-    trajectory_text: str
+    tool_name: str, arguments: Dict[str, Any], trajectory_text: str
 ) -> str:
     """
     Execute a tool call with given arguments.
-    
+
     Args:
         tool_name: Name of the tool to execute ('traj_find' or 'traj_get')
         arguments: Arguments for the tool
         trajectory_text: Full trajectory text in JSON format
-        
+
     Returns:
         Result of the tool execution as string
     """
@@ -255,12 +256,12 @@ def execute_tool_call(
         mode = arguments.get("mode", "keyword")
         indices = traj_find(trajectory_text, query, mode)
         return json.dumps({"indices": indices, "count": len(indices)})
-    
+
     elif tool_name == "traj_get":
         span = arguments.get("span")
         fields = arguments.get("fields")
         result = traj_get(trajectory_text, span, fields)
         return result
-    
+
     else:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})

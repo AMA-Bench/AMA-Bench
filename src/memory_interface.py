@@ -1,16 +1,17 @@
+import asyncio
 import json
 import re
-import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from tqdm import tqdm
 
-from src.model_client import ModelClient
-from src.method_register import get_method, list_methods
-from src.method.base_method import BaseMethod
-from utils.extract_final_answer import extract_final_answer
+from method_register import get_method
+from model_client import ModelClient
 from utils.embedding import EmbeddingEngine
+from utils.extract_final_answer import extract_final_answer
+
 
 class MemoryQAInterface:
     """
@@ -50,10 +51,9 @@ class MemoryQAInterface:
         self.max_concurrency_episodes = max_concurrency_episodes
         self.max_concurrency_questions = max_concurrency_questions
         self.subset = subset
-        vllm_launch = client.config.get('vllm_launch', {})
-        self.max_tokens = (
-            client.config.get('max_tokens')
-            or vllm_launch.get('max_response_len', 4096)
+        vllm_launch: Dict[str, Any] = client.config.get("vllm_launch", {})
+        self.max_tokens = client.config.get("max_tokens") or vllm_launch.get(
+            "max_response_len", 4096
         )
         self.embedding_engine = embedding_engine
 
@@ -62,15 +62,12 @@ class MemoryQAInterface:
                 self.method_name,
                 config_path=method_config,
                 client=client,
-                embedding_engine=embedding_engine
+                embedding_engine=embedding_engine,
             )
         else:
             self.method = get_method(
-                self.method_name,
-                client=client,
-                embedding_engine=embedding_engine
+                self.method_name, client=client, embedding_engine=embedding_engine
             )
-
 
     def _trajectory_to_text(self, trajectory: List[Dict[str, Any]]) -> str:
         """
@@ -117,7 +114,9 @@ class MemoryQAInterface:
 
         return memory
 
-    def answer_question(self, question: str, memory: Any, temperature: float = 0.0) -> Dict[str, str]:
+    def answer_question(
+        self, question: str, memory: Any, temperature: float = 0.0
+    ) -> Dict[str, str]:
         """
         Answer a question using the memory.
 
@@ -135,7 +134,7 @@ class MemoryQAInterface:
         """
         retrieved_context = self.method.memory_retrieve(memory, question)
 
-        mcq_mode = (self.subset == "mcq")
+        mcq_mode = self.subset == "mcq"
         if mcq_mode:
             instructions = (
                 "Select all correct options and respond using "
@@ -156,7 +155,9 @@ class MemoryQAInterface:
             f"{answer_slot}"
         )
 
-        response = self.client.query(prompt, temperature=temperature, max_tokens=self.max_tokens)
+        response = self.client.query(
+            prompt, temperature=temperature, max_tokens=self.max_tokens
+        )
 
         match = re.search(r"Answer\[1\]:\s*(.+?)$", response, re.DOTALL)
         if match:
@@ -166,17 +167,20 @@ class MemoryQAInterface:
             final_answer = extract_final_answer(response)
 
         return {
-            'final_answer': final_answer,
-            'reasoning_trace': retrieved_context,
+            "final_answer": final_answer,
+            "reasoning_trace": retrieved_context,
         }
-    
 
-    def _answer_question_with_index(self, question: str, memory: Any, qa_index: int) -> tuple:
+    def _answer_question_with_index(
+        self, question: str, memory: Any, qa_index: int
+    ) -> tuple:
         """Helper method for parallel question answering."""
         result = self.answer_question(question, memory)
         return qa_index, result
 
-    def answer_all_questions_batch(self, questions: List[str], memory: Any, temperature: float = 0.0) -> List[str]:
+    def answer_all_questions_batch(
+        self, questions: List[str], memory: Any, temperature: float = 0.0
+    ) -> List[str]:
         """
         Answer all questions in a single batch call (for longcontext method).
 
@@ -192,13 +196,15 @@ class MemoryQAInterface:
         Returns:
             List of final answers
         """
-        mcq_mode = (self.subset == "mcq")
+        mcq_mode = self.subset == "mcq"
 
         # memory_retrieve builds the complete prompt and handles truncation
         prompt = self.method.memory_retrieve(memory, questions, mcq_mode=mcq_mode)
 
         # Query LLM once for all questions
-        response = self.client.query(prompt, temperature=temperature, max_tokens=self.max_tokens)
+        response = self.client.query(
+            prompt, temperature=temperature, max_tokens=self.max_tokens
+        )
 
         # Parse Answer[{i}]: markers
         answer_list = []
@@ -242,13 +248,15 @@ class MemoryQAInterface:
             answer_list = []
             reasoning_traces = []
 
-            with ThreadPoolExecutor(max_workers=self.max_concurrency_questions) as executor:
+            with ThreadPoolExecutor(
+                max_workers=self.max_concurrency_questions
+            ) as executor:
                 futures = {
                     executor.submit(
                         self._answer_question_with_index,
                         qa_pair.get("question", ""),
                         memory,
-                        i
+                        i,
                     ): i
                     for i, qa_pair in enumerate(qa_pairs)
                 }
@@ -261,22 +269,26 @@ class MemoryQAInterface:
                 # Build answer_list and reasoning_traces in order
                 for i in range(len(qa_pairs)):
                     result = results_dict[i]
-                    answer_list.append(result['final_answer'])
-                    reasoning_traces.append(result['reasoning_trace'])
+                    answer_list.append(result["final_answer"])
+                    reasoning_traces.append(result["reasoning_trace"])
 
             # Combine reasoning traces
-            reasoning_trace = "\n\n---\n\n".join([
-                f"Q{i+1} Reasoning:\n{trace}"
-                for i, trace in enumerate(reasoning_traces)
-            ])
+            reasoning_trace = "\n\n---\n\n".join(
+                [
+                    f"Q{i+1} Reasoning:\n{trace}"
+                    for i, trace in enumerate(reasoning_traces)
+                ]
+            )
 
         return {
-            'episode_id': episode_id,
-            'answer_list': answer_list,
-            'reasoning_trace': reasoning_trace,
+            "episode_id": episode_id,
+            "answer_list": answer_list,
+            "reasoning_trace": reasoning_trace,
         }
 
-    def run(self, file_path: str, episodes: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    def run(
+        self, file_path: str, episodes: Optional[List[Dict[str, Any]]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Process a single JSONL file containing multiple episodes.
         Each episode contains multiple QA pairs.
@@ -302,31 +314,42 @@ class MemoryQAInterface:
         # Use pre-loaded episodes if provided, otherwise read from file
         if episodes is None:
             episodes = []
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
                     episode_data = json.loads(line.strip())
                     episodes.append(episode_data)
 
         print(f"Total episodes: {len(episodes)}")
-        print(f"Max concurrency - Episodes: {self.max_concurrency_episodes}, Questions: {self.max_concurrency_questions}")
+        print(
+            f"Max concurrency - Episodes: {self.max_concurrency_episodes}, Questions: {self.max_concurrency_questions}"
+        )
 
         # Process episodes with parallelism
         all_results = []
         with ThreadPoolExecutor(max_workers=self.max_concurrency_episodes) as executor:
             futures = {
-                executor.submit(self.process_episode, episode): episode.get('episode_id', idx)
+                executor.submit(self.process_episode, episode): episode.get(
+                    "episode_id", idx
+                )
                 for idx, episode in enumerate(episodes)
             }
 
             # Use tqdm for progress bar
-            with tqdm(total=len(episodes), desc="Processing episodes", unit="episode") as pbar:
+            with tqdm(
+                total=len(episodes), desc="Processing episodes", unit="episode"
+            ) as pbar:
                 for future in as_completed(futures):
                     result = future.result()
                     all_results.append(result)
                     pbar.update(1)
-                    pbar.set_postfix({"Episode": result['episode_id'], "Questions": len(result['answer_list'])})
+                    pbar.set_postfix(
+                        {
+                            "Episode": result["episode_id"],
+                            "Questions": len(result["answer_list"]),
+                        }
+                    )
 
         # Sort results by episode_id to maintain order
-        all_results.sort(key=lambda x: x['episode_id'])
+        all_results.sort(key=lambda x: x["episode_id"])
 
         return all_results

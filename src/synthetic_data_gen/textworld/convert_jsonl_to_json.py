@@ -17,8 +17,8 @@ Usage:
 """
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 def parse_kv_args(argv):
@@ -35,7 +35,9 @@ def parse_kv_args(argv):
     return args
 
 
-def convert_jsonl_to_json(input_file_path: str = None, output_dir_path: str = "dataset/textworld"):
+def convert_jsonl_to_json(
+    input_file_path: str = None, output_dir_path: str = "dataset/textworld"
+):
     """
     Convert JSONL to individual JSON files in AMA-Bench dataset format.
 
@@ -108,5 +110,7 @@ if __name__ == "__main__":
     input_file = kv.get("input_file", None)
     output_dir = kv.get("output_dir", "dataset/textworld")
 
-    num_converted = convert_jsonl_to_json(input_file_path=input_file, output_dir_path=output_dir)
+    num_converted = convert_jsonl_to_json(
+        input_file_path=input_file, output_dir_path=output_dir
+    )
     sys.exit(0 if num_converted > 0 else 1)

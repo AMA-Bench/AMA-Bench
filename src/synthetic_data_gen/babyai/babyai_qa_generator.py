@@ -13,7 +13,13 @@ from typing import Any, Dict, List, Optional, Tuple
 class BabyAIQAGenerator:
     """Generate QA pairs based on BabyAI trajectories."""
 
-    def __init__(self, trajectory: List[Dict[str, Any]], task: str = "", task_type: str = "", seed: Optional[int] = None):
+    def __init__(
+        self,
+        trajectory: List[Dict[str, Any]],
+        task: str = "",
+        task_type: str = "",
+        seed: Optional[int] = None,
+    ):
         self.trajectory = trajectory
         self.task = task
         self.task_type = task_type
@@ -36,7 +42,7 @@ class BabyAIQAGenerator:
         match = re.search(r"In your view:\s*(.+?)(?:\.|$)", observation)
         if not match:
             return []
-        
+
         view_text = match.group(1)
         # Parse objects like "2x a green ball, a green box, a purple box"
         objects = []
@@ -69,16 +75,24 @@ class BabyAIQAGenerator:
                 return match.group(1).strip()
         return None
 
-    def _add_candidate(self, key: str, question: str, answer: str, qa_type: str, step: int, subtype: str = None) -> bool:
+    def _add_candidate(
+        self,
+        key: str,
+        question: str,
+        answer: str,
+        qa_type: str,
+        step: int,
+        subtype: str = None,
+    ) -> bool:
         """Add a candidate QA pair. qa_type should be A, B, C, or D. subtype should be like A1, A2, B1, etc."""
         if key in self.used_keys:
             return False
         self.used_keys.add(key)
-        
+
         normalized_type = qa_type.upper() if qa_type else "A"
         if normalized_type not in ["A", "B", "C", "D"]:
             normalized_type = "A"  # Default to A if invalid
-        
+
         # Extract subtype from key if not provided
         if subtype is None:
             # Extract subtype from key (e.g., "a1_action_sequence" -> "A1")
@@ -88,15 +102,17 @@ class BabyAIQAGenerator:
             else:
                 # Default subtype based on type
                 subtype = f"{normalized_type}1"
-        
-        self.candidate_qa_list.append({
-            "question": question,
-            "answer": answer,
-            "type": normalized_type,
-            "subtype": subtype.upper(),
-            "step": step,
-            "key": key
-        })
+
+        self.candidate_qa_list.append(
+            {
+                "question": question,
+                "answer": answer,
+                "type": normalized_type,
+                "subtype": subtype.upper(),
+                "step": step,
+                "key": key,
+            }
+        )
         return True
 
     def _get_inventory_state(self, observation: str) -> Dict[str, Any]:
@@ -106,7 +122,9 @@ class BabyAIQAGenerator:
         inventory = []
         if "carrying" in observation.lower() or "inventory" in observation.lower():
             # Try to extract what agent is carrying
-            match = re.search(r"(?:carrying|inventory):\s*(.+?)(?:\n|$)", observation, re.IGNORECASE)
+            match = re.search(
+                r"(?:carrying|inventory):\s*(.+?)(?:\n|$)", observation, re.IGNORECASE
+            )
             if match:
                 items = [item.strip() for item in match.group(1).split(",")]
                 inventory = items
@@ -114,7 +132,7 @@ class BabyAIQAGenerator:
 
     def maybe_add_per_step(self, t: int):
         """Collect candidate QA pairs for current step.
-        
+
         Question types:
         - A: Temporal Information (A1-A4: various temporal questions)
         - B: State Dependency (B1-B3: state-action dependency questions)
@@ -148,7 +166,7 @@ class BabyAIQAGenerator:
                 act = self.trajectory[step_idx].get("action", "")
                 if act:
                     actions_sequence.append(f"step {step_idx}: {act}")
-            
+
             if len(actions_sequence) >= 3:
                 q = f"What actions does the agent execute between step {start_step} and step {t}? Describe the sequence of actions."
                 a = f"Between step {start_step} and step {t}, the agent executes the following actions: {'; '.join(actions_sequence)}."
@@ -156,30 +174,42 @@ class BabyAIQAGenerator:
 
         # A2: Ask before which step, what actions are there at step X for obj
         if t >= 1:
-            prev_obs = self.trajectory[t-1].get("observation", "") if t > 0 else ""
+            prev_obs = self.trajectory[t - 1].get("observation", "") if t > 0 else ""
             prev_visible = self._extract_visible_objects(prev_obs) if prev_obs else []
-            prev_action = self.trajectory[t-1].get("action", "") if t > 0 else ""
-            
+            prev_action = self.trajectory[t - 1].get("action", "") if t > 0 else ""
+
             if prev_visible and visible_objects:
                 # Find objects that were acted upon
                 for obj in visible_objects:
                     if obj in prev_visible and action in ["pickup", "drop", "toggle"]:
                         # Check if this object was acted upon
-                        action_desc = {"pickup": "picks up", "drop": "drops", "toggle": "toggles"}.get(action, action)
+                        action_desc = {
+                            "pickup": "picks up",
+                            "drop": "drops",
+                            "toggle": "toggles",
+                        }.get(action, action)
                         # Natural question that requires understanding context from previous step
                         q = f"When the agent encounters '{obj}' at step {t}, what does it do?"
                         a = f"At step {t}, the agent {action_desc} '{obj}' by executing the '{action}' action. This happens after the agent observed '{obj}' at step {t-1}."
-                        add("A", f"a2_obj_action_before_{t}_{obj[:20]}", q, a, subtype="A2")
+                        add(
+                            "A",
+                            f"a2_obj_action_before_{t}_{obj[:20]}",
+                            q,
+                            a,
+                            subtype="A2",
+                        )
                         break
 
         # A3: Ask before which step, which objs were xxx'd at step X
         if t >= 1:
-            prev_obs = self.trajectory[t-1].get("observation", "") if t > 0 else ""
+            prev_obs = self.trajectory[t - 1].get("observation", "") if t > 0 else ""
             prev_visible = self._extract_visible_objects(prev_obs) if prev_obs else []
-            
+
             if prev_visible and visible_objects:
                 # Find objects that disappeared (picked up or moved away from)
-                disappeared = [obj for obj in prev_visible if obj not in visible_objects]
+                disappeared = [
+                    obj for obj in prev_visible if obj not in visible_objects
+                ]
                 if disappeared and action in ["pickup", "forward", "left", "right"]:
                     obj = disappeared[0]
                     # Natural question that requires comparing states across steps
@@ -194,13 +224,13 @@ class BabyAIQAGenerator:
         # A4: Background: stepX1 state1, action1; stepX2 state2 action2
         # Ask: agent in state1 does action1, what are the subsequent state and action?
         if t >= 1 and t < len(self.trajectory) - 1:
-            prev_step = self.trajectory[t-1]
+            prev_step = self.trajectory[t - 1]
             prev_obs = prev_step.get("observation", "")
             prev_action = prev_step.get("action", "")
-            next_step = self.trajectory[t+1]
+            next_step = self.trajectory[t + 1]
             next_obs = next_step.get("observation", "")
             next_action = next_step.get("action", "")
-            
+
             if prev_obs and next_obs:
                 prev_state_summary = f"state at step {t-1}: {prev_obs[:60]}..."
                 next_state_summary = f"state at step {t+1}: {next_obs[:60]}..."
@@ -215,17 +245,17 @@ class BabyAIQAGenerator:
         # B1: Background: stepX1 state1, action1; stepX2 state2 action2
         # Ask: what action can agent do to make state1 become state2
         if t >= 1:
-            prev_step = self.trajectory[t-1]
+            prev_step = self.trajectory[t - 1]
             prev_obs = prev_step.get("observation", "")
             prev_visible = self._extract_visible_objects(prev_obs) if prev_obs else []
             curr_obs = observation
             curr_visible = visible_objects
-            
+
             if prev_visible and curr_visible:
                 # Check for state changes
                 disappeared = [obj for obj in prev_visible if obj not in curr_visible]
                 appeared = [obj for obj in curr_visible if obj not in prev_visible]
-                
+
                 if (disappeared or appeared) and action:
                     state1_summary = f"state at step {t-1}: visible objects include {', '.join(prev_visible[:3])}"
                     state2_summary = f"state at step {t}: visible objects include {', '.join(curr_visible[:3])}"
@@ -240,12 +270,12 @@ class BabyAIQAGenerator:
         # B2: Background: stepX1 state1, action1; stepX2 state2 action2
         # Ask: agent in state1 does action1, what state2 will it become?
         if t >= 1:
-            prev_step = self.trajectory[t-1]
+            prev_step = self.trajectory[t - 1]
             prev_obs = prev_step.get("observation", "")
             prev_visible = self._extract_visible_objects(prev_obs) if prev_obs else []
             curr_obs = observation
             curr_visible = visible_objects
-            
+
             if prev_visible and curr_visible and action:
                 state1_summary = f"state at step {t-1}: visible objects include {', '.join(prev_visible[:3])}"
                 state2_summary = f"state at step {t}: visible objects include {', '.join(curr_visible[:3])}"
@@ -256,11 +286,11 @@ class BabyAIQAGenerator:
         # B3: Test dependency: background, this step inventory is empty or agent is not at that position, etc.
         # Ask: at step X can execute what action
         if t >= 1:
-            prev_step = self.trajectory[t-1]
+            prev_step = self.trajectory[t - 1]
             prev_obs = prev_step.get("observation", "")
             prev_visible = self._extract_visible_objects(prev_obs) if prev_obs else []
             inventory_state = self._get_inventory_state(prev_obs)
-            
+
             # Check if there are constraints that would prevent certain actions
             if inventory_state["empty"] and action == "drop":
                 # Can't drop if inventory is empty
@@ -281,16 +311,20 @@ class BabyAIQAGenerator:
         # C1: What are the inventory changes, at which steps did they change respectively?
         if t >= 2:
             inventory_changes = []
-            for step_idx in range(max(0, t-3), min(t+1, len(self.trajectory))):
+            for step_idx in range(max(0, t - 3), min(t + 1, len(self.trajectory))):
                 obs = self.trajectory[step_idx].get("observation", "")
                 act = self.trajectory[step_idx].get("action", "")
                 inv_state = self._get_inventory_state(obs)
-                
+
                 if act == "pickup":
-                    inventory_changes.append(f"step {step_idx}: agent picks up item (inventory changes)")
+                    inventory_changes.append(
+                        f"step {step_idx}: agent picks up item (inventory changes)"
+                    )
                 elif act == "drop":
-                    inventory_changes.append(f"step {step_idx}: agent drops item (inventory changes)")
-            
+                    inventory_changes.append(
+                        f"step {step_idx}: agent drops item (inventory changes)"
+                    )
+
             if inventory_changes:
                 q = f"What are the inventory changes from step {max(0, t-3)} to step {t}? At which steps did the inventory change respectively?"
                 a = f"The inventory changes from step {max(0, t-3)} to step {t} are: {'; '.join(inventory_changes)}."
@@ -303,34 +337,60 @@ class BabyAIQAGenerator:
             target_obj = self._extract_target_object(self.task)
             if not target_obj and visible_objects:
                 target_obj = visible_objects[0] if visible_objects else None
-            
+
             if target_obj:
                 change_steps = []
-                for step_idx in range(max(0, t-4), min(t+1, len(self.trajectory))):
+                for step_idx in range(max(0, t - 4), min(t + 1, len(self.trajectory))):
                     obs = self.trajectory[step_idx].get("observation", "")
                     act = self.trajectory[step_idx].get("action", "")
                     visible = self._extract_visible_objects(obs)
-                    
-                    prev_obs = self.trajectory[step_idx-1].get("observation", "") if step_idx > 0 else ""
-                    prev_visible = self._extract_visible_objects(prev_obs) if prev_obs else []
-                    
+
+                    prev_obs = (
+                        self.trajectory[step_idx - 1].get("observation", "")
+                        if step_idx > 0
+                        else ""
+                    )
+                    prev_visible = (
+                        self._extract_visible_objects(prev_obs) if prev_obs else []
+                    )
+
                     # Check if object appeared or disappeared
-                    was_visible = any(target_obj.lower() in obj.lower() for obj in prev_visible) if prev_visible else False
-                    is_visible = any(target_obj.lower() in obj.lower() for obj in visible) if visible else False
-                    
+                    was_visible = (
+                        any(target_obj.lower() in obj.lower() for obj in prev_visible)
+                        if prev_visible
+                        else False
+                    )
+                    is_visible = (
+                        any(target_obj.lower() in obj.lower() for obj in visible)
+                        if visible
+                        else False
+                    )
+
                     if was_visible != is_visible:
-                        change_type = "appeared" if is_visible and not was_visible else "disappeared"
+                        change_type = (
+                            "appeared"
+                            if is_visible and not was_visible
+                            else "disappeared"
+                        )
                         change_steps.append((step_idx, change_type, act))
-                
+
                 if len(change_steps) >= 2:
                     x1, change1, act1 = change_steps[0]
-                    x2, change2, act2 = change_steps[1] if len(change_steps) > 1 else change_steps[0]
+                    x2, change2, act2 = (
+                        change_steps[1] if len(change_steps) > 1 else change_steps[0]
+                    )
                     y = 1  # X2 + Y
                     future_step = min(x2 + y, len(self.trajectory) - 1)
                     future_obs = self.trajectory[future_step].get("observation", "")
                     future_visible = self._extract_visible_objects(future_obs)
-                    future_state = "visible" if any(target_obj.lower() in obj.lower() for obj in future_visible) else "not visible"
-                    
+                    future_state = (
+                        "visible"
+                        if any(
+                            target_obj.lower() in obj.lower() for obj in future_visible
+                        )
+                        else "not visible"
+                    )
+
                     q = f"Background: The object '{target_obj}' changed at step {x1} ({change1}) and step {x2} ({change2}). Question: What is the state of '{target_obj}' at step {x2 + y}? At which step did it change? Were there other changes before step {x2}?"
                     a = f"The object '{target_obj}' at step {x2 + y} is {future_state}. It changed at step {x2} ({change2}, action: '{act2}'). "
                     if len(change_steps) > 1:
@@ -348,25 +408,43 @@ class BabyAIQAGenerator:
             target_obj = self._extract_target_object(self.task)
             milestones = []
             key_actions = []
-            
+
             for step_idx in range(min(t + 1, len(self.trajectory))):
                 obs = self.trajectory[step_idx].get("observation", "")
                 act = self.trajectory[step_idx].get("action", "")
                 visible = self._extract_visible_objects(obs)
-                
-                if act and act not in ["forward", "left", "right"]:  # Non-movement actions
+
+                if act and act not in [
+                    "forward",
+                    "left",
+                    "right",
+                ]:  # Non-movement actions
                     key_actions.append(f"step {step_idx}: {act}")
-                
+
                 if target_obj:
-                    is_target_visible = any(target_obj.lower() in obj.lower() for obj in visible)
+                    is_target_visible = any(
+                        target_obj.lower() in obj.lower() for obj in visible
+                    )
                     if is_target_visible and step_idx == 0:
-                        milestones.append(f"step {step_idx}: target '{target_obj}' initially visible")
+                        milestones.append(
+                            f"step {step_idx}: target '{target_obj}' initially visible"
+                        )
                     elif is_target_visible and step_idx > 0:
-                        prev_obs = self.trajectory[step_idx-1].get("observation", "") if step_idx > 0 else ""
-                        prev_visible = self._extract_visible_objects(prev_obs) if prev_obs else []
-                        if not any(target_obj.lower() in obj.lower() for obj in prev_visible):
-                            milestones.append(f"step {step_idx}: target '{target_obj}' becomes visible")
-            
+                        prev_obs = (
+                            self.trajectory[step_idx - 1].get("observation", "")
+                            if step_idx > 0
+                            else ""
+                        )
+                        prev_visible = (
+                            self._extract_visible_objects(prev_obs) if prev_obs else []
+                        )
+                        if not any(
+                            target_obj.lower() in obj.lower() for obj in prev_visible
+                        ):
+                            milestones.append(
+                                f"step {step_idx}: target '{target_obj}' becomes visible"
+                            )
+
             if len(key_actions) >= 2 or len(milestones) >= 1:
                 q = f"Summarize the agent's trajectory from step 0 to step {t} for the task '{self.task}'. What are the key actions and milestones?"
                 a = f"From step 0 to step {t}, the agent's trajectory includes: "
@@ -385,32 +463,43 @@ class BabyAIQAGenerator:
                     obs = self.trajectory[step_idx].get("observation", "")
                     act = self.trajectory[step_idx].get("action", "")
                     visible = self._extract_visible_objects(obs)
-                    
-                    is_target_visible = any(target_obj.lower() in obj.lower() for obj in visible)
-                    
+
+                    is_target_visible = any(
+                        target_obj.lower() in obj.lower() for obj in visible
+                    )
+
                     if is_target_visible:
-                        path_steps.append(f"step {step_idx}: sees target '{target_obj}'")
+                        path_steps.append(
+                            f"step {step_idx}: sees target '{target_obj}'"
+                        )
                     if act == "pickup" and is_target_visible:
-                        path_steps.append(f"step {step_idx}: picks up target '{target_obj}'")
-                    if "go to" in self.task.lower() and act in ["forward", "left", "right"] and is_target_visible:
-                        path_steps.append(f"step {step_idx}: moves towards target '{target_obj}'")
-                
+                        path_steps.append(
+                            f"step {step_idx}: picks up target '{target_obj}'"
+                        )
+                    if (
+                        "go to" in self.task.lower()
+                        and act in ["forward", "left", "right"]
+                        and is_target_visible
+                    ):
+                        path_steps.append(
+                            f"step {step_idx}: moves towards target '{target_obj}'"
+                        )
+
                 if len(path_steps) >= 2:
                     q = f"Trace the agent's path to achieving the goal '{self.task}'. What are the key steps and how does the agent progress from step 0 to step {t}?"
                     a = f"To achieve the goal '{self.task}', the agent follows this path: {'; '.join(path_steps)}. This requires examining the trajectory from step 0 to step {t}, tracking when the target '{target_obj}' appears and the sequence of actions taken."
                     add("D", f"d2_goal_path_{t}", q, a, subtype="D2")
 
-
     def add_final_QA(self):
         """Select target_count QA pairs from candidates with balanced category distribution.
-        
+
         Quotas: A+B+C = 10, D = 2 (total = 12)
         If target_count is different, adjust proportionally but keep D=2 when possible.
         """
         from collections import defaultdict
-        
+
         candidates_by_type = defaultdict(list)
-        
+
         for candidate in self.candidate_qa_list:
             candidates_by_type[candidate["type"]].append(candidate)
 
@@ -424,42 +513,62 @@ class BabyAIQAGenerator:
             # Keep D at least 1 if possible, rest goes to ABC
             d_total = min(2, max(1, self.target_count // 6))
             abc_total = self.target_count - d_total
-        
+
         total_needed = abc_total + d_total
-        
+
         # Adjust target_count if needed (should be 12, but use what's available)
         if len(self.candidate_qa_list) <= total_needed:
             for candidate in self.candidate_qa_list:
-                self.qa_pairs.append({
-                    "question": candidate["question"],
-                    "answer": candidate["answer"],
-                    "type": candidate["type"],
-                    "sub_type": candidate.get("subtype", f"{candidate['type']}1")
-                })
+                self.qa_pairs.append(
+                    {
+                        "question": candidate["question"],
+                        "answer": candidate["answer"],
+                        "type": candidate["type"],
+                        "sub_type": candidate.get("subtype", f"{candidate['type']}1"),
+                    }
+                )
             return
-        
+
         # Check available categories
-        abc_categories = [cat for cat in ["A", "B", "C"] if len(candidates_by_type[cat]) > 0]
+        abc_categories = [
+            cat for cat in ["A", "B", "C"] if len(candidates_by_type[cat]) > 0
+        ]
         d_available = len(candidates_by_type["D"]) > 0
-        
+
         if not abc_categories and not d_available:
             return
-        
+
         # Set quotas for A, B, C (should add up to 10)
         if len(abc_categories) == 0:
-            category_quotas = {"A": 0, "B": 0, "C": 0, "D": min(d_total, len(candidates_by_type["D"]))}
+            category_quotas = {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "D": min(d_total, len(candidates_by_type["D"])),
+            }
         elif len(abc_categories) == 1:
-            category_quotas = {abc_categories[0]: min(abc_total, len(candidates_by_type[abc_categories[0]])), 
-                              "A": 0, "B": 0, "C": 0, 
-                              "D": min(d_total, len(candidates_by_type["D"])) if d_available else 0}
+            category_quotas = {
+                abc_categories[0]: min(
+                    abc_total, len(candidates_by_type[abc_categories[0]])
+                ),
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "D": min(d_total, len(candidates_by_type["D"])) if d_available else 0,
+            }
         elif len(abc_categories) == 2:
             # Distribute 10 between 2 categories: 5 each
             cat1, cat2 = abc_categories[0], abc_categories[1]
             quota1 = min(5, len(candidates_by_type[cat1]))
             quota2 = min(abc_total - quota1, len(candidates_by_type[cat2]))
-            category_quotas = {cat1: quota1, cat2: quota2, 
-                              "A": 0, "B": 0, "C": 0,
-                              "D": min(d_total, len(candidates_by_type["D"])) if d_available else 0}
+            category_quotas = {
+                cat1: quota1,
+                cat2: quota2,
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "D": min(d_total, len(candidates_by_type["D"])) if d_available else 0,
+            }
             # Set unused category to 0
             for cat in ["A", "B", "C"]:
                 if cat not in abc_categories:
@@ -470,11 +579,13 @@ class BabyAIQAGenerator:
                 "A": min(4, len(candidates_by_type["A"])),
                 "B": min(3, len(candidates_by_type["B"])),
                 "C": min(3, len(candidates_by_type["C"])),
-                "D": min(d_total, len(candidates_by_type["D"])) if d_available else 0
+                "D": min(d_total, len(candidates_by_type["D"])) if d_available else 0,
             }
-            
+
             # Adjust if some categories don't have enough candidates
-            abc_actual = category_quotas["A"] + category_quotas["B"] + category_quotas["C"]
+            abc_actual = (
+                category_quotas["A"] + category_quotas["B"] + category_quotas["C"]
+            )
             if abc_actual < abc_total:
                 # Redistribute remaining quota
                 remaining = abc_total - abc_actual
@@ -488,22 +599,22 @@ class BabyAIQAGenerator:
                         remaining -= add_quota
 
         selected_candidates = []
-        
+
         # Select candidates for each category, prioritizing subtype diversity
         for category, quota in category_quotas.items():
             if quota == 0:
                 continue
-            
+
             category_candidates = candidates_by_type[category]
-            
+
             # Group by subtype for diversity
             subtype_groups = defaultdict(list)
             for cand in category_candidates:
                 subtype = cand.get("subtype", f"{category}1")
                 subtype_groups[subtype].append(cand)
-            
+
             selected_for_category = []
-            
+
             # Special handling for D category: ensure D1 and D2 are selected
             if category == "D" and quota >= 2:
                 # Try to get both D1 and D2
@@ -511,12 +622,12 @@ class BabyAIQAGenerator:
                     selected_for_category.append(subtype_groups["D1"][0])
                 if "D2" in subtype_groups and len(selected_for_category) < quota:
                     selected_for_category.append(subtype_groups["D2"][0])
-            
+
             # For all categories, prioritize selecting different subtypes
             if len(selected_for_category) < quota:
                 # Sort subtypes to prioritize diversity
                 available_subtypes = sorted(subtype_groups.keys())
-                
+
                 # Round-robin through subtypes to maximize diversity
                 subtype_idx = 0
                 while len(selected_for_category) < quota and available_subtypes:
@@ -524,75 +635,89 @@ class BabyAIQAGenerator:
                     for _ in range(len(available_subtypes)):
                         if len(selected_for_category) >= quota:
                             break
-                        
-                        subtype = available_subtypes[subtype_idx % len(available_subtypes)]
+
+                        subtype = available_subtypes[
+                            subtype_idx % len(available_subtypes)
+                        ]
                         subtype_idx += 1
-                        
+
                         # Get candidates of this subtype that haven't been selected
-                        available = [c for c in subtype_groups[subtype] if c not in selected_for_category]
+                        available = [
+                            c
+                            for c in subtype_groups[subtype]
+                            if c not in selected_for_category
+                        ]
                         if available:
                             selected_for_category.append(available[0])
                             break
                     else:
                         # If no more candidates available, break
                         break
-            
+
             # If still need more, fill with any remaining candidates
             if len(selected_for_category) < quota:
-                remaining_cands = [c for c in category_candidates if c not in selected_for_category]
-                selected_for_category.extend(remaining_cands[:quota - len(selected_for_category)])
-            
+                remaining_cands = [
+                    c for c in category_candidates if c not in selected_for_category
+                ]
+                selected_for_category.extend(
+                    remaining_cands[: quota - len(selected_for_category)]
+                )
+
             selected_candidates.extend(selected_for_category)
-        
+
         # Sort by step for final output
         selected_candidates.sort(key=lambda x: x["step"])
 
         for candidate in selected_candidates:
-            self.qa_pairs.append({
-                "question": candidate["question"],
-                "answer": candidate["answer"],
-                "type": candidate["type"],
-                "sub_type": candidate.get("subtype", f"{candidate['type']}1")
-            })
+            self.qa_pairs.append(
+                {
+                    "question": candidate["question"],
+                    "answer": candidate["answer"],
+                    "type": candidate["type"],
+                    "sub_type": candidate.get("subtype", f"{candidate['type']}1"),
+                }
+            )
 
     def generate_all(self, target_count: int = 12) -> List[Dict[str, str]]:
         """Generate all QA pairs up to target_count.
-        
+
         Default target_count is 12: A+B+C=10, D=2
         """
         self.target_count = target_count
-        
+
         # Generate QA pairs (including multi-hop questions integrated into A-D categories)
         for t in range(len(self.trajectory)):
             self.maybe_add_per_step(t)
-        
+
         self.add_final_QA()
-        
+
         return self.qa_pairs
 
 
-def generate_qa_for_trajectory(trajectory_data: Dict[str, Any], target_count: int = 12, seed: Optional[int] = None) -> List[Dict[str, str]]:
+def generate_qa_for_trajectory(
+    trajectory_data: Dict[str, Any], target_count: int = 12, seed: Optional[int] = None
+) -> List[Dict[str, str]]:
     """Generate QA pairs for a single trajectory.
-    
+
     Args:
         trajectory_data: Dictionary containing trajectory data with 'trajectory', 'task', 'task_type'
         target_count: Target number of QA pairs to generate
         seed: Random seed for reproducibility (optional)
-        
+
     Returns:
         List of QA pairs, each with 'question', 'answer', 'type', 'sub_type'
     """
     trajectory = trajectory_data.get("trajectory", [])
     task = trajectory_data.get("task", "")
     task_type = trajectory_data.get("task_type", "")
-    
+
     # Use episode_id as seed if seed not provided and episode_id exists
     if seed is None:
         episode_id = trajectory_data.get("episode_id", "")
         if episode_id:
             # Generate a deterministic seed from episode_id
             seed = hash(episode_id) % (2**31)
-    
+
     generator = BabyAIQAGenerator(trajectory, task, task_type, seed=seed)
     return generator.generate_all(target_count)
 
@@ -606,21 +731,21 @@ if __name__ == "__main__":
             {
                 "turn_idx": 0,
                 "action": "forward",
-                "observation": "Mission: go to a green ball\nIn your view: 2x a green ball, a green box, a purple box, a purple ball. Walls border the area. You are facing north."
+                "observation": "Mission: go to a green ball\nIn your view: 2x a green ball, a green box, a purple box, a purple ball. Walls border the area. You are facing north.",
             },
             {
                 "turn_idx": 1,
                 "action": "forward",
-                "observation": "Mission: go to a green ball\nIn your view: 2x a green ball, a green box, a purple box, a purple ball. Walls border the area. You are facing north."
+                "observation": "Mission: go to a green ball\nIn your view: 2x a green ball, a green box, a purple box, a purple ball. Walls border the area. You are facing north.",
             },
             {
                 "turn_idx": 2,
                 "action": "right",
-                "observation": "Mission: go to a green ball\nIn your view: 2x a green ball, a purple box, a purple ball. Walls border the area. You are facing north."
-            }
-        ]
+                "observation": "Mission: go to a green ball\nIn your view: 2x a green ball, a purple box, a purple ball. Walls border the area. You are facing north.",
+            },
+        ],
     }
-    
+
     qa_pairs = generate_qa_for_trajectory(sample_trajectory, target_count=12)
     print(f"Generated {len(qa_pairs)} QA pairs:")
     for i, qa in enumerate(qa_pairs, 1):

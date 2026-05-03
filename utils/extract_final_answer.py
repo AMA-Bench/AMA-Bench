@@ -21,7 +21,7 @@ def extract_final_answer(response: str) -> str:
             answer = parts[1].strip()
             # Remove any trailing markers or extra text
             # Take first line if multi-line
-            answer = answer.split('\n')[0].strip()
+            answer = answer.split("\n")[0].strip()
             return answer
 
     # If no marker found, return the original response

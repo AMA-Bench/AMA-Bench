@@ -4,11 +4,13 @@ Memory Construction Module for AMA-Agent
 This module handles the construction of state memory from trajectory data.
 It processes trajectory text into different turns and embeds them for retrieval.
 """
+
 import json
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Any, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
+
+from .prompt import CAUSAL_PROMPT_TEMPLATE, COMPRESS_PROMPT_TEMPLATE
 from .utils import extract_state_memory_from_response, truncate_trajectory_text
-from .prompt import COMPRESS_PROMPT_TEMPLATE, CAUSAL_PROMPT_TEMPLATE
 
 
 def construct_state_memory(
@@ -18,7 +20,7 @@ def construct_state_memory(
     chunk_size: int = 2048,
     session_size: int = 16384,
     embed_engine: Optional[Callable] = None,
-    causal: bool = False
+    causal: bool = False,
 ) -> Dict[str, Any]:
     """
     Construct state memory from trajectory text.
@@ -50,19 +52,14 @@ def construct_state_memory(
     trajectory = _parse_trajectory_text(trajectory_text)
 
     # Build text memory
-    trajectory_data = {
-        'trajectory': trajectory,
-        'task': task,
-        'episode_id': 'episode'
-    }
+    trajectory_data = {"trajectory": trajectory, "task": task, "episode_id": "episode"}
     text_mem = {
-        'task': task,
-        'trajectory_text': trajectory_text,
-        'trajectory_data': trajectory_data,
-        'episode_id': 'episode',
-        'num_turns': len(trajectory)
+        "task": task,
+        "trajectory_text": trajectory_text,
+        "trajectory_data": trajectory_data,
+        "episode_id": "episode",
+        "num_turns": len(trajectory),
     }
-
 
     # Build state memory (and optionally causal graph)
     if causal:
@@ -70,14 +67,14 @@ def construct_state_memory(
             trajectory_text=trajectory_text,
             task=task,
             session_size=session_size,
-            call_llm_func=call_llm_func
+            call_llm_func=call_llm_func,
         )
     else:
         state_mem = _process_trajectory(
             trajectory_text=trajectory_text,
             task=task,
             session_size=session_size,
-            call_llm_func=call_llm_func
+            call_llm_func=call_llm_func,
         )
         causal_graph = None
 
@@ -89,11 +86,11 @@ def construct_state_memory(
     )
 
     return {
-        'state_mem': state_mem,
-        'causal_graph': causal_graph,
-        'text_mem': text_mem,
-        'embed_mem': embed_mem,
-        'trajectory': trajectory
+        "state_mem": state_mem,
+        "causal_graph": causal_graph,
+        "text_mem": text_mem,
+        "embed_mem": embed_mem,
+        "trajectory": trajectory,
     }
 
 
@@ -120,7 +117,7 @@ def _parse_trajectory_text(trajectory_text: str) -> List[Dict[str, Any]]:
         List of turn dictionaries with keys: turn_idx, action, observation
     """
     trajectory = []
-    lines = trajectory_text.strip().split('\n')
+    lines = trajectory_text.strip().split("\n")
 
     current_turn: Dict[str, Any] = {}
     current_field: Optional[str] = None
@@ -129,27 +126,31 @@ def _parse_trajectory_text(trajectory_text: str) -> List[Dict[str, Any]]:
         stripped = line.strip()
 
         # Match "Turn X:" or "Step X:" header
-        if (stripped.startswith('Turn ') or stripped.startswith('Step ')) and ':' in stripped:
+        if (
+            stripped.startswith("Turn ") or stripped.startswith("Step ")
+        ) and ":" in stripped:
             if current_turn:
                 trajectory.append(current_turn)
             try:
-                turn_num = int(stripped.split(':')[0].split()[-1])
-                current_turn = {'turn_idx': turn_num}
+                turn_num = int(stripped.split(":")[0].split()[-1])
+                current_turn = {"turn_idx": turn_num}
             except (ValueError, IndexError):
                 current_turn = {}
             current_field = None
 
-        elif stripped.startswith('Action:'):
-            current_turn['action'] = stripped[7:].strip()
-            current_field = 'action'
+        elif stripped.startswith("Action:"):
+            current_turn["action"] = stripped[7:].strip()
+            current_field = "action"
 
-        elif stripped.startswith('Observation:'):
-            current_turn['observation'] = stripped[12:].strip()
-            current_field = 'observation'
+        elif stripped.startswith("Observation:"):
+            current_turn["observation"] = stripped[12:].strip()
+            current_field = "observation"
 
         elif current_field and stripped and current_turn:
             # Continuation of a multi-line action or observation
-            current_turn[current_field] = current_turn.get(current_field, '') + '\n' + stripped
+            current_turn[current_field] = (
+                current_turn.get(current_field, "") + "\n" + stripped
+            )
 
     if current_turn:
         trajectory.append(current_turn)
@@ -159,14 +160,14 @@ def _parse_trajectory_text(trajectory_text: str) -> List[Dict[str, Any]]:
 
 def _build_trajectory_chunks(text: str, chunk_size: int) -> List[str]:
     """Split trajectory text into chunks of at most chunk_size characters."""
-    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+    return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
 def _process_trajectory(
     trajectory_text: str,
     task: str,
     session_size: int,
-    call_llm_func: Optional[Callable]
+    call_llm_func: Optional[Callable],
 ) -> Optional[str]:
     """
     Process trajectory text to build state memory.
@@ -183,9 +184,7 @@ def _process_trajectory(
     # Single-session path
     if total_chars <= session_size:
         compress_prompt = COMPRESS_PROMPT_TEMPLATE.format(
-            task=task,
-            trajectory_text=trajectory_text,
-            previous_state_text=""
+            task=task, trajectory_text=trajectory_text, previous_state_text=""
         )
         _, llm_response = call_llm_func(compress_prompt)
         if llm_response:
@@ -198,9 +197,7 @@ def _process_trajectory(
     # Phase 1: process all sessions concurrently (each independently)
     def _compress_chunk(chunk_text: str) -> Optional[str]:
         prompt = COMPRESS_PROMPT_TEMPLATE.format(
-            task=task,
-            trajectory_text=chunk_text,
-            previous_state_text=""
+            task=task, trajectory_text=chunk_text, previous_state_text=""
         )
         _, response = call_llm_func(prompt)
         return extract_state_memory_from_response(response) if response else None
@@ -214,7 +211,6 @@ def _process_trajectory(
         return None
     merged = "\n\n".join(valid_states)
     return merged
-
 
 
 def _build_turn_embeddings(
@@ -244,9 +240,9 @@ def _build_turn_embeddings(
     # Build per-turn texts
     turns_data: List[tuple] = []
     for turn in trajectory:
-        turn_idx = turn.get('turn_idx', 0)
-        action = turn.get('action', '')
-        observation = turn.get('observation', '')
+        turn_idx = turn.get("turn_idx", 0)
+        action = turn.get("action", "")
+        observation = turn.get("observation", "")
         turn_text = f"Turn {turn_idx}: Action={action}, Observation={observation}"
         turns_data.append((turn_idx, turn_text))
 
@@ -266,7 +262,9 @@ def _build_turn_embeddings(
             # Large turn is its own chunk
             chunks.append((turn_text, [turn_idx]))
         else:
-            buf_text = (buf_text + "\n" + turn_text).lstrip("\n") if buf_text else turn_text
+            buf_text = (
+                (buf_text + "\n" + turn_text).lstrip("\n") if buf_text else turn_text
+            )
             buf_indices.append(turn_idx)
             if len(buf_text) >= min_chunk_size:
                 chunks.append((buf_text, buf_indices))
@@ -294,12 +292,15 @@ def _build_turn_embeddings(
             embeddings_out.append(emb)
 
     return {
-        'embeddings': embeddings_out,
-        'turn_texts': turn_texts_out,
-        'turn_indices': turn_indices_out
+        "embeddings": embeddings_out,
+        "turn_texts": turn_texts_out,
+        "turn_indices": turn_indices_out,
     }
 
-def _extract_causal_graph_from_response(llm_response: str) -> Optional[List[Dict[str, Any]]]:
+
+def _extract_causal_graph_from_response(
+    llm_response: str,
+) -> Optional[List[Dict[str, Any]]]:
     """
     Extract the causal graph JSON array from LLM response after **CAUSAL_GRAPH** marker.
 
@@ -319,11 +320,12 @@ def _extract_causal_graph_from_response(llm_response: str) -> Optional[List[Dict
     if pos == -1:
         return None
 
-    after_marker = llm_response[pos + len(marker):].strip()
+    after_marker = llm_response[pos + len(marker) :].strip()
 
     # Find the JSON array
     import re
-    json_match = re.search(r'(\[.*?\])', after_marker, re.DOTALL)
+
+    json_match = re.search(r"(\[.*?\])", after_marker, re.DOTALL)
     if not json_match:
         return None
 
@@ -337,8 +339,8 @@ def _process_trajectory_causal(
     trajectory_text: str,
     task: str,
     session_size: int,
-    call_llm_func: Optional[Callable]
-) -> tuple:
+    call_llm_func: Optional[Callable],
+) -> tuple[Optional[str], Optional[List[Dict[str, Any]]]]:
     """
     Process trajectory to extract both state memory and causal graph.
 
@@ -360,15 +362,21 @@ def _process_trajectory_causal(
     accumulated_state = ""
     all_causal_edges: List[Dict[str, Any]] = []
 
-    chunks = [trajectory_text] if total_chars <= session_size else _build_trajectory_chunks(trajectory_text, session_size)
+    chunks = (
+        [trajectory_text]
+        if total_chars <= session_size
+        else _build_trajectory_chunks(trajectory_text, session_size)
+    )
 
     for chunk_text in chunks:
-        previous_state_text = f"Previous State Memory:\n{accumulated_state}" if accumulated_state else ""
+        previous_state_text = (
+            f"Previous State Memory:\n{accumulated_state}" if accumulated_state else ""
+        )
 
         causal_prompt = CAUSAL_PROMPT_TEMPLATE.format(
             task=task,
             trajectory_text=chunk_text,
-            previous_state_text=previous_state_text
+            previous_state_text=previous_state_text,
         )
 
         _, llm_response = call_llm_func(causal_prompt)

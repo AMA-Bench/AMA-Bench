@@ -19,7 +19,7 @@ def load_trajectories(path: Path) -> List[Dict]:
     """Load trajectories from a JSONL file or a directory of JSON files."""
     out: List[Dict] = []
     path = Path(path)
-    
+
     if path.is_file():
         # Load from JSONL file
         with open(path, "r", encoding="utf-8") as f:
@@ -37,7 +37,7 @@ def load_trajectories(path: Path) -> List[Dict]:
                 print(f"⚠️  Warning: Failed to load {json_file}: {e}")
     else:
         raise FileNotFoundError(f"Path not found: {path}")
-    
+
     return out
 
 
@@ -123,7 +123,9 @@ def print_analysis(stats: Dict, title: str = "BabyAI Analysis") -> None:
 
     print("Overall:")
     print(f"  Total: {stats['total_count']}")
-    print(f"  Success: {stats['success_rate']:.1f}% ({stats['success_count']}/{stats['total_count']})")
+    print(
+        f"  Success: {stats['success_rate']:.1f}% ({stats['success_count']}/{stats['total_count']})"
+    )
     print(f"  Fail: {stats['fail_count']}")
 
     print("\nToken stats:")
@@ -187,7 +189,8 @@ def check_requirements(stats: Dict, min_per_bin: int = 10) -> bool:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Analyze BabyAI trajectories (JSONL).")
     ap.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         type=str,
         default="babyai_out_batch",
         help="Input path: JSONL file or directory of JSON files (default: babyai_out_batch)",
@@ -203,7 +206,9 @@ def main() -> None:
     path = Path(args.input)
     if not path.exists():
         print(f"Error: not found: {path}")
-        print("Run: python batch_trajetory_gen.py --difficulty <level> --random_ratio <ratio> --observation_format <format> --traj_per_bin <N> --output_dir babyai_out_batch")
+        print(
+            "Run: python batch_trajetory_gen.py --difficulty <level> --random_ratio <ratio> --observation_format <format> --traj_per_bin <N> --output_dir babyai_out_batch"
+        )
         return
 
     trajs = load_trajectories(path)
